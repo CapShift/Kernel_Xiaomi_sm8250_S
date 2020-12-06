@@ -112,3 +112,4 @@ obj-$(CONFIG_MEMFD_CREATE) += memfd.o
 obj-$(CONFIG_HW_XRECLAIMER) += xreclaimer/
 obj-$(CONFIG_HYPERHOLD) += memcg_reclaim.o
 obj-$(CONFIG_HYPERHOLD) += memcg_control.o
+CFLAGS_kmemleak.o += -DCONFIG_DEBUG_FS
