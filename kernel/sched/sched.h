@@ -171,7 +171,7 @@ enum fastpaths {
 };
 
 extern int num_sched_clusters;
-
+extern unsigned int super_big_cpu;
 extern cpumask_t asym_cap_sibling_cpus;
 #endif /* CONFIG_SCHED_WALT */
 
