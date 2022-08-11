@@ -195,3 +195,4 @@ obj-$(CONFIG_SENSORS_SSC)	+= sensors/
 
 obj-$(CONFIG_VOYAGER_ADDON)		+= voyager/
 
+obj-$(CONFIG_MIHW)		+= mihw/

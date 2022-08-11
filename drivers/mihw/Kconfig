@@ -12,3 +12,9 @@ config MIGT_ENERGY_MODEL
 	  the Device Tree. Since EAS now uses only the active costs of CPUs,
 	  the cluster-related costs and idle-costs are ignored.
 
+config MILLET
+	bool "frozen framework"
+	depends on MIHW
+	---help---
+	  Mi frozen function
+
