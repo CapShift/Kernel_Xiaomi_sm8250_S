@@ -390,6 +390,20 @@ static unsigned int choose_freq(struct sugov_policy *sg_policy,
 }
 #endif /* CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD */
 
+#ifdef CONFIG_PACKAGE_RUNTIME_INFO
+__weak unsigned int glk_freq_limit(struct cpufreq_policy *policy,
+		unsigned int *target_freq)
+{
+	return 0;
+}
+
+__weak unsigned long glk_cal_freq(struct cpufreq_policy *policy,
+		unsigned long util, unsigned long max)
+{
+	return 0;
+}
+#endif
+
 #define TARGET_LOAD 80
 #ifdef CONFIG_CPUFREQ_GOV_SCHEDUTIL_WALT_AWARE
 static inline int walt_map_util_freq(unsigned long util,
@@ -436,6 +450,9 @@ static unsigned int get_next_freq(struct sugov_policy *sg_policy,
 {
 	struct cpufreq_policy *policy = sg_policy->policy;
 	unsigned int final_freq;
+#ifdef CONFIG_PACKAGE_RUNTIME_INFO
+	unsigned int walt_freq;
+#endif
 #ifdef CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD
 	unsigned int freq = policy->cpuinfo.max_freq;
 	unsigned int prev_freq = freq;
@@ -443,9 +460,18 @@ static unsigned int get_next_freq(struct sugov_policy *sg_policy,
 #ifdef CONFIG_CPUFREQ_GOV_SCHEDUTIL_WALT_AWARE
 	struct sugov_cpu *sg_cpu;
         int def_freq = choose_freq(sg_policy, prev_laf);
-        int walt_freq = walt_map_util_freq(util, sg_policy, max, sg_cpu->cpu);
+        int next_freq = walt_map_util_freq(util, sg_policy, max, sg_cpu->cpu);
 
-        freq = min(def_freq, walt_freq);
+#ifdef CONFIG_PACKAGE_RUNTIME_INFO
+	walt_freq = min(def_freq, next_freq);
+	freq = glk_cal_freq(policy, util, max);
+	if (!freq)
+		freq = glk_freq_limit(policy, &walt_freq);
+	else
+		sg_policy->need_freq_update = true;
+#else
+	freq = min(def_freq, next_freq);
+#endif
 #else
 	freq = choose_freq(sg_policy, prev_laf);
 #endif
