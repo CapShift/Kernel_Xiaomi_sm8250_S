@@ -49,7 +49,7 @@ struct gpu_devinfo {
 static int init_gpu_suc;
 static struct gpu_devinfo gdev_zero;
 static struct gpu_devinfo *gdev;
-static unsigned int disable_pcost = 1;
+static unsigned int disable_pcost = 0; /*enable by default*/
 module_param(disable_pcost, uint, 0644);
 
 static int gpufreq_notifier_trans(struct notifier_block *nb,

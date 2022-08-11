@@ -86,7 +86,7 @@ static unsigned int debug_pcost;
 module_param(debug_pcost, uint, 0644);
 static unsigned int power_unit = 60 * HZ; /*1 min*/
 module_param(power_unit, uint, 0644);
-static unsigned int disable_pcost = 1;
+static unsigned int disable_pcost = 0; /*enable by default*/
 module_param(disable_pcost, uint, 0644);
 static struct cluster_devinfo cluster_info[MAX_CLUSTER];
 static DEFINE_PER_CPU(struct cpu_state, cpu_st);
