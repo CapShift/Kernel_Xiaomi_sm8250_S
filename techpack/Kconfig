@@ -9,3 +9,9 @@ config OSSFOD
 	depends on BOARD_XIAOMI && !MIHW
 	help
 	  When this option is enabled, OSS FOD support will be added.
+	  
+config DISABLE_MI_FOD_DIMLAYER
+	bool "MI FOD switch"
+	depends on BOARD_XIAOMI
+	help
+	  When this option is enabled, MI FOD dimlayer will be disabled.

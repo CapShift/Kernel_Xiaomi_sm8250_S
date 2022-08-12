@@ -472,7 +472,7 @@ int dsi_panel_parse_mi_config(struct dsi_panel *panel,
 		pr_err("mi,mdss-dsi-panel-fod-off-b5-index not defined\n");
 	}
 
-#ifndef CONFIG_MI_FOD_DIMLAYER
+#ifndef CONFIG_DISABLE_MI_FOD_DIMLAYER
 	mi_cfg->fod_dimlayer_enabled = utils->read_bool(of_node,
 		"mi,mdss-dsi-panel-fod-dimlayer-enabled");
 #else
