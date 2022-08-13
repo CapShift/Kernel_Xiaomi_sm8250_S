@@ -95,7 +95,9 @@
 #include <linux/thread_info.h>
 #include <linux/cpufreq_times.h>
 #include <linux/scs.h>
-
+#ifdef CONFIG_MIHW
+#include <linux/cpuset.h>
+#endif
 #include <asm/pgtable.h>
 #include <asm/pgalloc.h>
 #include <linux/uaccess.h>
@@ -2403,6 +2405,16 @@ long _do_fork(unsigned long clone_flags,
 		lru_gen_add_mm(p->mm);
 		task_unlock(p);
 	}
+
+#ifdef CONFIG_MIHW
+	p->top_app = 0;
+	p->inherit_top_app = 0;
+	p->critical_task = 0;
+
+	if (current->critical_task) {
+		cpuset_cpus_allowed_mi(p);
+	}
+#endif
 
 #ifdef CONFIG_PERF_CRITICAL_RT_TASK
 	p->critical_rt_task = 0;
