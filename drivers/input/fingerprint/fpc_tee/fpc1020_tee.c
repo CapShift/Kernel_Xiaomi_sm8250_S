@@ -18,7 +18,7 @@
  *
  *
  * Copyright (c) 2015 Fingerprint Cards AB <tech@fingerprints.com>
- * Copyright (C) 2021 XiaoMi, Inc.
+ * Copyright (C) 2022 Xiaomi, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License Version 2
@@ -27,6 +27,7 @@
 
 #define FPC_DRM_INTERFACE_WA
 
+#define CONFIG_FINGERPRINT_FP_VREG_CONTROL
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/atomic.h>
@@ -44,9 +45,8 @@
 #include <linux/fb.h>
 #include <linux/pinctrl/qcom-pinctrl.h>
 #include <drm/drm_bridge.h>
-#ifndef FPC_DRM_INTERFACE_WA
 #include <drm/drm_notifier_mi.h>
-#endif
+//#include <asm/hwconf_manager.h>
 
 #define FPC_GPIO_NO_DEFAULT -1
 #define FPC_GPIO_NO_DEFINED -2
@@ -69,6 +69,7 @@
 #define RELEASE_WAKELOCK "release_wakelock"
 #define START_IRQS_RECEIVED_CNT "start_irqs_received_counter"
 
+#define HWMON_CONPONENT_NAME "fingerprint"
 
 static const char *const pctl_names[] = {
 	"fpc1020_reset_reset",
@@ -83,15 +84,15 @@ struct vreg_config {
 	int gpio;
 };
 
+#ifdef CONFIG_FINGERPRINT_FP_VREG_CONTROL
 struct regulator *vreg;
+#endif
 
 static struct vreg_config vreg_conf[] = {
 	{"vdd_ana", 1800000UL, 1800000UL, 6000, FPC_GPIO_NO_DEFAULT},
 	/*{ "vcc_spi", 1800000UL, 1800000UL, 10, }, */
 	/*{ "vdd_io", 1800000UL, 1800000UL, 6000, }, */
 };
-
-static int power_cfg = 0;
 
 struct fpc1020_data {
 	struct device *dev;
@@ -118,9 +119,7 @@ struct fpc1020_data {
 
 	atomic_t wakeup_enabled;	/* Used both in ISR and non-ISR */
 	int irqf;
-#ifndef FPC_DRM_INTERFACE_WA
 	struct notifier_block fb_notifier;
-#endif
 	bool fb_black;
 	bool wait_finger_down;
 	struct work_struct work;
@@ -570,36 +569,35 @@ static int device_prepare(struct fpc1020_data *fpc1020, bool enable)
 
 		select_pin_ctl(fpc1020, "fpc1020_reset_reset");
 
-		if (power_cfg == 1) {
-			pr_info("Try to enable fp_vdd_vreg\n");
-			vreg = regulator_get(dev, "fp_vdd_vreg");
+#ifdef CONFIG_FINGERPRINT_FP_VREG_CONTROL
+		pr_info("Try to enable fp_vdd_vreg\n");
+		vreg = regulator_get(dev, "fp_vdd_vreg");
 
-			if (vreg == NULL) {
-				dev_err(dev, "fp_vdd_vreg regulator get failed!\n");
-				goto exit;
-			}
+		if (vreg == NULL) {
+			dev_err(dev, "fp_vdd_vreg regulator get failed!\n");
+			goto exit;
+		}
 
-			if (regulator_is_enabled(vreg)) {
-				pr_info("fp_vdd_vreg is already enabled!\n");
-			} else {
-				rc = regulator_enable(vreg);
-				if (rc) {
-					dev_err(dev, "error enabling fp_vdd_vreg!\n");
-					regulator_put(vreg);
-					vreg = NULL;
-					goto exit;
-				}
-			}
-
-			pr_info("fp_vdd_vreg is enabled!\n");
+		if (regulator_is_enabled(vreg)) {
+			pr_info("fp_vdd_vreg is already enabled!\n");
 		} else {
-			rc = vreg_setup(fpc1020, "vdd_ana", true);
+			rc = regulator_enable(vreg);
 			if (rc) {
-				dev_dbg(dev, "fpc power on failed。 \n");
-				goto exit;
+			dev_err(dev, "error enabling fp_vdd_vreg!\n");
+			regulator_put(vreg);
+			vreg = NULL;
+			goto exit;
 			}
 		}
 
+		pr_info("fp_vdd_vreg is enabled!\n");
+#else
+		rc = vreg_setup(fpc1020, "vdd_ana", true);
+		if (rc) {
+			dev_dbg(dev, "fpc power on failed。 \n");
+			goto exit;
+		}
+#endif
 		usleep_range(PWR_ON_SLEEP_MIN_US, PWR_ON_SLEEP_MAX_US);
 
 		/* As we can't control chip select here the other part of the
@@ -623,20 +621,13 @@ static int device_prepare(struct fpc1020_data *fpc1020, bool enable)
 		(void)select_pin_ctl(fpc1020, "fpc1020_reset_reset");
 
 		usleep_range(PWR_ON_SLEEP_MIN_US, PWR_ON_SLEEP_MAX_US);
-
-		if (power_cfg == 1) {
-			rc = regulator_disable(vreg);
-			if (rc) {
-				dev_dbg(dev, "error disabling fp_vdd_vreg!\n");
-				goto exit;
-			}
-		} else {
-			rc = vreg_setup(fpc1020, "vdd_ana", false);
-			if (rc) {
-				dev_dbg(dev, "fpc vreg power off failed. \n");
-				goto exit;
-			}
+#ifndef CONFIG_FINGERPRINT_FP_VREG_CONTROL
+		rc = vreg_setup(fpc1020, "vdd_ana", false);
+		if (rc) {
+			dev_dbg(dev, "fpc vreg power off failed. \n");
+			goto exit;
 		}
+#endif
 exit:
 		fpc1020->prepared = false;
 	} else {
@@ -792,6 +783,8 @@ static ssize_t vendor_update(struct device *dev,
 			     const char *buf, size_t count)
 {
 	int rc;
+	//rc = add_hw_component_info(HWMON_CONPONENT_NAME, "ic_vendor", (char *)buf);
+	//rc = add_hw_component_info(HWMON_CONPONENT_NAME, "reserve", "0xFFFF");
 	return rc ? rc : count;
 }
 
@@ -822,31 +815,6 @@ static ssize_t irq_enable_set(struct device *dev,
 static DEVICE_ATTR(irq_enable, S_IWUSR | S_IRUSR | S_IRGRP | S_IWGRP, NULL,
 		   irq_enable_set);
 
-static ssize_t power_cfg_set(struct device *dev,
-				  struct device_attribute *attr,
-				  const char *buf, size_t count)
-{
-	int rc = 0;
-	struct fpc1020_data *fpc1020 = dev_get_drvdata(dev);
-
-	mutex_lock(&fpc1020->lock);
-
-	if (!strncmp(buf, "1V8", strlen("1V8")))
-		power_cfg = 0;
-	else if (!strncmp(buf, "3V3", strlen("3V3")))
-		power_cfg = 1;
-	else
-		rc = -EINVAL;
-
-	mutex_unlock(&fpc1020->lock);
-
-	dev_info(fpc1020->dev, "fpc set power_cfg: %d, rc: %d\n", power_cfg, rc);
-
-	return rc ? rc : count;
-}
-
-static DEVICE_ATTR(power_cfg, S_IWUSR, NULL, power_cfg_set);
-
 static struct attribute *attributes[] = {
 	&dev_attr_request_vreg.attr,
 	&dev_attr_pinctl_set.attr,
@@ -860,7 +828,6 @@ static struct attribute *attributes[] = {
 	&dev_attr_irq.attr,
 	&dev_attr_vendor.attr,
 	&dev_attr_fingerdown_wait.attr,
-	&dev_attr_power_cfg.attr,
 	NULL
 };
 
@@ -929,7 +896,6 @@ static int fpc1020_request_named_gpio(struct fpc1020_data *fpc1020,
 	return 0;
 }
 
-#ifndef FPC_DRM_INTERFACE_WA
 static int fpc_fb_notif_callback(struct notifier_block *nb,
 				 unsigned long val, void *data)
 {
@@ -966,7 +932,6 @@ static int fpc_fb_notif_callback(struct notifier_block *nb,
 static struct notifier_block fpc_notif_block = {
 	.notifier_call = fpc_fb_notif_callback,
 };
-#endif
 
 static int fpc1020_probe(struct platform_device *pdev)
 {
@@ -989,6 +954,7 @@ static int fpc1020_probe(struct platform_device *pdev)
 
 	fpc1020->dev = dev;
 	platform_set_drvdata(pdev, fpc1020);
+	//register_hw_component_info(HWMON_CONPONENT_NAME);
 
 	if (!np) {
 		dev_err(dev, "no of node found\n");
@@ -1062,11 +1028,17 @@ static int fpc1020_probe(struct platform_device *pdev)
 	fpc1020->wait_finger_down = false;
 #ifndef FPC_DRM_INTERFACE_WA
 	INIT_WORK(&fpc1020->work, notification_work);
+#endif
 	fpc1020->fb_notifier = fpc_notif_block;
 	mi_drm_register_client(&fpc1020->fb_notifier);
-#endif
 
 	//rc = hw_reset(fpc1020);
+
+	if (msm_gpio_mpm_wake_set(121, true)) {
+		dev_info(dev, "%s: GPIO 121 wake set failed!\n", __func__);
+	} else {
+		dev_info(dev, "%s: GPIO 121 wake set success!\n", __func__);
+	}
 
 	dev_info(dev, "%s: ok\n", __func__);
 
@@ -1079,14 +1051,13 @@ static int fpc1020_remove(struct platform_device *pdev)
 {
 	struct fpc1020_data *fpc1020 = platform_get_drvdata(pdev);
 
-#ifndef FPC_DRM_INTERFACE_WA
 	mi_drm_unregister_client(&fpc1020->fb_notifier);
-#endif
 	sysfs_remove_group(&pdev->dev.kobj, &attribute_group);
 	mutex_destroy(&fpc1020->lock);
 	wakeup_source_unregister(fpc1020->ttw_wl);
 	(void)vreg_setup(fpc1020, "vdd_ana", false);
 	(void)reset_gpio_res(fpc1020);
+	//unregister_hw_component_info(HWMON_CONPONENT_NAME);
 	/*
 	   (void)vreg_setup(fpc1020, "vdd_io", false);
 	   (void)vreg_setup(fpc1020, "vcc_spi", false);
