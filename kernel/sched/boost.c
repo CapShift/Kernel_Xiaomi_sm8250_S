@@ -95,9 +95,9 @@ static void set_boost_policy(int type)
 static bool verify_boost_params(int type)
 {
 #ifdef CONFIG_MIHW
-	return type >= RESTRAINED_BOOST_DISABLE && type <= RESTRAINED_BOOST;
-#else
 	return type >= RESTRAINED_BOOST_DISABLE && type <= MI_BOOST;
+#else
+	return type >= RESTRAINED_BOOST_DISABLE && type <= RESTRAINED_BOOST;
 #endif
 }
 
