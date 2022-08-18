@@ -905,13 +905,16 @@ fail:
 	return -EPERM;
 }
 
+DEFINE_PER_CPU(cpumask_var_t, select_rq_mask);
+
 static void
 walt_select_task_rq_fair(void *unused, struct task_struct *p, int prev_cpu,
 				int sd_flag, int wake_flags, int *target_cpu)
 {
 	int sync;
 	int sibling_count_hint;
-
+	int walt_target = walt_find_energy_efficient_cpu(p, prev_cpu, sync, sibling_count_hint);
+	int def_target = sched_find_energy_efficient_cpu(p, prev_cpu, sync);
 	if (unlikely(walt_disabled))
 		return;
 
@@ -925,7 +928,7 @@ walt_select_task_rq_fair(void *unused, struct task_struct *p, int prev_cpu,
 		rcu_read_unlock();
 	}
 
-	*target_cpu = walt_find_energy_efficient_cpu(p, prev_cpu, sync, sibling_count_hint);
+	*target_cpu = min(walt_target, def_target);
 	if (unlikely(*target_cpu < 0))
 		*target_cpu = prev_cpu;
 }
