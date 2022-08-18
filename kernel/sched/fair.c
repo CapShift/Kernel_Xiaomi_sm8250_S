@@ -3938,7 +3938,7 @@ bias_to_this_cpu(struct task_struct *p, int cpu, int start_cpu)
 	return base_test && start_cap_test;
 }
 
-static inline bool task_fits_capacity(struct task_struct *p,
+inline bool task_fits_capacity(struct task_struct *p,
 					long capacity,
 					int cpu)
 {
