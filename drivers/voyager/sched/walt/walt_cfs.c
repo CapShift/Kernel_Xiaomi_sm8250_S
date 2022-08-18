@@ -905,8 +905,6 @@ fail:
 	return -EPERM;
 }
 
-DEFINE_PER_CPU(cpumask_var_t, select_rq_mask);
-
 static void
 walt_select_task_rq_fair(void *unused, struct task_struct *p, int prev_cpu,
 				int sd_flag, int wake_flags, int *target_cpu)
