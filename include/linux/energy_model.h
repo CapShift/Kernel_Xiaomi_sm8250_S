@@ -21,6 +21,7 @@ struct em_cap_state {
 	unsigned long frequency;
 	unsigned long power;
 	unsigned long cost;
+	unsigned long flags;
 };
 
 /**
@@ -38,6 +39,7 @@ struct em_perf_domain {
 	struct em_cap_state *table;
 	int nr_cap_states;
 	unsigned long cpus[0];
+	unsigned long flags;
 };
 
 #define EM_CPU_MAX_POWER 0xFFFF
