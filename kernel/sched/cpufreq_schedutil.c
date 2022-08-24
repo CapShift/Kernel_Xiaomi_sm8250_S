@@ -621,10 +621,6 @@ static unsigned long sugov_get_util(struct sugov_cpu *sg_cpu)
 	unsigned long max = arch_scale_cpu_capacity(NULL, sg_cpu->cpu);
 	unsigned long util;
 
-	trace_cpufreq_get_util_hook(sg_cpu, util);
-	if (util >= 0)
-		return util;
-
 	sg_cpu->max = max;
 	sg_cpu->bw_dl = cpu_bw_dl(rq);
 
