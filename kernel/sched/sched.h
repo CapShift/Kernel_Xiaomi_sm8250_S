@@ -3448,3 +3448,6 @@ void __weak init_task_runtime_info(struct task_struct *tsk)
 	return;
 }
 #endif
+
+int get_start_cpu(struct task_struct *p);
+

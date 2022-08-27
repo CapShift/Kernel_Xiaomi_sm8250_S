@@ -723,6 +723,7 @@ int walt_find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 	int boosted = (schedtune_task_boost(p) > 0) || (task_boost > 0);
 	int start_cpu, order_index, end_index;
 	int first_cpu;
+	int start_cpu_legacy;
 	bool energy_eval_needed = true;
 	struct compute_energy_output output;
 
@@ -732,10 +733,19 @@ int walt_find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 
 	if (unlikely(!cpu_array))
 		return -EPERM;
+ 
+	start_cpu_legacy = get_start_cpu(p);
+	if (start_cpu_legacy < 0)
+		return -1;
 
 	walt_get_indicies(p, &order_index, &end_index, task_boost, boost,
 								&energy_eval_needed);
-	start_cpu = cpumask_first(&cpu_array[order_index][0]);
+#ifdef CONFIG_MIGT
+	if (game_vip_task(p) || game_super_task(p))
+		start_cpu = start_cpu_legacy;
+	else
+#endif
+		start_cpu = cpumask_first(&cpu_array[order_index][0]);
 
 	is_rtg = task_in_related_thread_group(p);
 	curr_is_rtg = task_in_related_thread_group(cpu_rq(cpu)->curr);
@@ -926,7 +936,13 @@ walt_select_task_rq_fair(void *unused, struct task_struct *p, int prev_cpu,
 		rcu_read_unlock();
 	}
 
+#ifdef CONFIG_MIGT
+	if (game_vip_task(p) || game_super_task(p))
+		*target_cpu = walt_target;
+	else
+#endif
 	*target_cpu = min(walt_target, def_target);
+
 	if (unlikely(*target_cpu < 0))
 		*target_cpu = prev_cpu;
 }
