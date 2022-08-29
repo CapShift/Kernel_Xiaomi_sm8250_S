@@ -21,7 +21,10 @@
 #ifdef CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD
 /* Target load. Lower values result in higher CPU speeds. */
 #define DEFAULT_TARGET_LOAD 80
-static unsigned int default_target_loads[] = {DEFAULT_TARGET_LOAD};
+#define DEFAULT_RATE_LIMIT_US 0
+static unsigned int default_above_hispeed_delay[] = {
+                  DEFAULT_RATE_LIMIT_US };
+static unsigned int default_target_loads[] = { DEFAULT_TARGET_LOAD };
 #endif
 
 struct sugov_tunables {
@@ -36,6 +39,13 @@ struct sugov_tunables {
 	spinlock_t		target_loads_lock;
 	unsigned int		*target_loads;
 	int			ntarget_loads;
+		/*
+	 * Wait this long before raising speed above hispeed, by default a
+	 * single timer interval.
+	 */
+	spinlock_t above_hispeed_delay_lock;
+	unsigned int *above_hispeed_delay;
+	int nabove_hispeed_delay;
 #endif /* CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD */
 	unsigned int		target_load_thresh;
 	unsigned int		target_load_shift;
@@ -73,6 +83,15 @@ struct sugov_policy {
 
 	bool			limits_changed;
 	bool			need_freq_update;
+#ifdef CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD
+	u64			hispeed_validate_time;
+	u64			update_time;
+	/* used to detect freq locked */
+	ktime_t			start_time;
+	bool			freq_locked;
+	unsigned int		min_freq;
+	bool			after_limits_changed;
+#endif
 };
 
 struct sugov_cpu {
@@ -388,7 +407,61 @@ static unsigned int choose_freq(struct sugov_policy *sg_policy,
 
 	return freq;
 }
-#endif /* CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD */
+
+static unsigned int freq_to_above_hispeed_delay(struct sugov_tunables *tunables,
+						unsigned int freq)
+{
+	unsigned long flags;
+	unsigned int ret;
+	int i;
+
+	spin_lock_irqsave(&tunables->above_hispeed_delay_lock, flags);
+
+	for (i = 0; i < tunables->nabove_hispeed_delay - 1 &&
+		freq >= tunables->above_hispeed_delay[i + 1]; i += 2)
+		;
+
+	ret = tunables->above_hispeed_delay[i];
+	spin_unlock_irqrestore(&tunables->above_hispeed_delay_lock, flags);
+	return ret;
+}
+
+static bool sugov_time_limit(struct sugov_policy *sg_policy,
+				unsigned int next_freq, unsigned int flags)
+{
+	u64 delta_ns;
+	bool skip_hispeed_delay = false;
+	unsigned int delay;
+
+	if (flags & SCHED_CPUFREQ_EARLY_DET ||
+	    flags & SCHED_CPUFREQ_MIGRATION ||
+	    flags & SCHED_CPUFREQ_INTERCLUSTER_MIG)
+		skip_hispeed_delay = true;
+
+	if (sg_policy->after_limits_changed) {
+		skip_hispeed_delay = true;
+		sg_policy->after_limits_changed = false;
+	}
+
+	if (!skip_hispeed_delay && next_freq > sg_policy->next_freq &&
+	    sg_policy->next_freq >= sg_policy->tunables->hispeed_freq) {
+		delta_ns = sg_policy->update_time -
+				sg_policy->hispeed_validate_time;
+		delay = freq_to_above_hispeed_delay(sg_policy->tunables,
+							sg_policy->next_freq);
+		if (delta_ns < NSEC_PER_USEC * delay) {
+			trace_sugov_time_limit(cpumask_first(sg_policy->policy->cpus),
+					"above_hispeed_delay", delta_ns,
+					sg_policy->next_freq, next_freq);
+			return true;
+		}
+	}
+
+	sg_policy->hispeed_validate_time = sg_policy->update_time;
+	return false;
+}
+#endif
+
 
 #ifdef CONFIG_PACKAGE_RUNTIME_INFO
 __weak unsigned int glk_freq_limit(struct cpufreq_policy *policy,
@@ -828,8 +901,15 @@ static void sugov_walt_adjust(struct sugov_cpu *sg_cpu, unsigned long *util,
  */
 static inline void ignore_dl_rate_limit(struct sugov_cpu *sg_cpu, struct sugov_policy *sg_policy)
 {
+#ifdef CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD
+	if (cpu_bw_dl(cpu_rq(sg_cpu->cpu)) > sg_cpu->bw_dl) {
+		sg_policy->limits_changed = true;
+		sg_policy->after_limits_changed = true;
+	}
+#else
 	if (cpu_bw_dl(cpu_rq(sg_cpu->cpu)) > sg_cpu->bw_dl)
 		sg_policy->limits_changed = true;
+#endif
 }
 
 static inline unsigned long target_util(struct sugov_policy *sg_policy,
@@ -1014,11 +1094,20 @@ sugov_update_shared(struct update_util_data *hook, u64 time, unsigned int flags)
 	    !(flags & SCHED_CPUFREQ_CONTINUE)) {
 		next_f = sugov_next_freq_shared(sg_cpu, time);
 
+#ifdef CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD
+		sg_policy->update_time = time;
+		if (sugov_time_limit(sg_policy, next_f, flags))
+			goto out;
+#endif
+
 		if (sg_policy->policy->fast_switch_enabled)
 			sugov_fast_switch(sg_policy, time, next_f);
 		else
 			sugov_deferred_update(sg_policy, time, next_f);
 	}
+#ifdef CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD
+out:
+#endif
 
 	raw_spin_unlock(&sg_policy->update_lock);
 }
@@ -1248,10 +1337,9 @@ static ssize_t target_loads_show(struct gov_attr_set *attr_set, char *buf)
 
 	spin_lock_irqsave(&tunables->target_loads_lock, flags);
 	for (i = 0; i < tunables->ntarget_loads; i++)
-		ret += snprintf(buf + ret, PAGE_SIZE - ret - 1, "%u%s", tunables->target_loads[i],
+		ret += snprintf(buf + ret, sizeof(buf), "%u%s", tunables->target_loads[i],
 			i & 0x1 ? ":" : " ");
-
-	snprintf(buf + ret - 1, PAGE_SIZE - ret - 1, "\n");
+	snprintf(buf + ret - 1, sizeof(buf), "\n");
 	spin_unlock_irqrestore(&tunables->target_loads_lock, flags);
 	return ret;
 }
@@ -1323,6 +1411,49 @@ static ssize_t target_loads_store(struct gov_attr_set *attr_set, const char *buf
 
 	return count;
 }
+
+static ssize_t above_hispeed_delay_store(struct gov_attr_set *attr_set,
+					const char *buf, size_t count)
+{
+	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
+	unsigned int *new_above_hispeed_delay = NULL;
+	unsigned long flags;
+	int ntokens;
+
+	new_above_hispeed_delay = get_tokenized_data(buf, &ntokens);
+	if (IS_ERR(new_above_hispeed_delay))
+		return PTR_ERR(new_above_hispeed_delay);
+
+	spin_lock_irqsave(&tunables->above_hispeed_delay_lock, flags);
+	if (tunables->above_hispeed_delay != default_above_hispeed_delay)
+		kfree(tunables->above_hispeed_delay);
+	tunables->above_hispeed_delay = new_above_hispeed_delay;
+	tunables->nabove_hispeed_delay = ntokens;
+	spin_unlock_irqrestore(&tunables->above_hispeed_delay_lock, flags);
+
+	return count;
+}
+
+static ssize_t above_hispeed_delay_show(struct gov_attr_set *attr_set,
+					char *buf)
+{
+	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
+	unsigned long flags;
+	ssize_t ret = 0;
+	int i;
+
+	spin_lock_irqsave(&tunables->above_hispeed_delay_lock, flags);
+
+	for (i = 0; i < tunables->nabove_hispeed_delay; i++)
+		ret += snprintf(buf + ret, PAGE_SIZE - ret, "%u%s",
+				tunables->above_hispeed_delay[i],
+				i & 0x1 ? ":" : " ");
+
+	snprintf(buf + ret - 1, PAGE_SIZE - ret + 1, "\n");
+	spin_unlock_irqrestore(&tunables->above_hispeed_delay_lock, flags);
+
+	return ret;
+}
 #endif /* CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD */
 
 #define SUGOV_ATTR_RW(_name)						\
@@ -1360,6 +1491,8 @@ static struct governor_attr pl = __ATTR_RW(pl);
 #ifdef CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD
 static struct governor_attr target_loads =
 	__ATTR(target_loads, 0664, target_loads_show, target_loads_store);
+static struct governor_attr above_hispeed_delay =
+				__ATTR_RW(above_hispeed_delay);
 #endif /* CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD */
 SUGOV_ATTR_RW(target_load_thresh);
 SUGOV_ATTR_RW(target_load_shift);
@@ -1372,6 +1505,7 @@ static struct attribute *sugov_attributes[] = {
 	&hispeed_freq.attr,
 #ifdef CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD
 	&target_loads.attr,
+	&above_hispeed_delay.attr,
 #endif /* CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD */
 	&target_load_thresh.attr,
 	&target_load_shift.attr,
@@ -1502,6 +1636,10 @@ static void sugov_tunables_save(struct cpufreq_policy *policy,
 	cached->down_rate_limit_us = tunables->down_rate_limit_us;
 	cached->target_load_thresh = tunables->target_load_thresh;
 	cached->target_load_shift = tunables->target_load_shift;
+#ifdef CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD
+	cached->above_hispeed_delay = tunables->above_hispeed_delay;
+	cached->nabove_hispeed_delay = tunables->nabove_hispeed_delay;
+#endif
 }
 
 static void sugov_clear_global_tunables(void)
@@ -1527,6 +1665,10 @@ static void sugov_tunables_restore(struct cpufreq_policy *policy)
 	tunables->down_rate_limit_us = cached->down_rate_limit_us;
 	tunables->target_load_thresh = cached->target_load_thresh;
 	tunables->target_load_shift = cached->target_load_shift;
+#ifdef CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD
+	tunables->above_hispeed_delay = cached->above_hispeed_delay;
+	tunables->nabove_hispeed_delay = cached->nabove_hispeed_delay;
+#endif
 }
 
 static int sugov_init(struct cpufreq_policy *policy)
@@ -1579,6 +1721,10 @@ static int sugov_init(struct cpufreq_policy *policy)
 	tunables->target_loads = default_target_loads;
 	tunables->ntarget_loads = ARRAY_SIZE(default_target_loads);
 	spin_lock_init(&tunables->target_loads_lock);
+	tunables->above_hispeed_delay = default_above_hispeed_delay;
+	tunables->nabove_hispeed_delay =
+		ARRAY_SIZE(default_above_hispeed_delay);
+	spin_lock_init(&tunables->above_hispeed_delay_lock);
 #endif /* CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD */
 	tunables->target_load_thresh = DEFAULT_TARGET_LOAD_THRESH;
 	tunables->target_load_shift = DEFAULT_TARGET_LOAD_SHIFT;
@@ -1674,6 +1820,13 @@ static int sugov_start(struct cpufreq_policy *policy)
 	sg_policy->limits_changed		= false;
 	sg_policy->need_freq_update		= false;
 	sg_policy->cached_raw_freq		= 0;
+#ifdef CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD
+	sg_policy->hispeed_validate_time	= 0;
+	sg_policy->update_time	= 0;
+	sg_policy->freq_locked			= false;
+	sg_policy->min_freq			= policy->min;
+	sg_policy->after_limits_changed		= false;
+#endif
 	sg_policy->prev_cached_raw_freq		= 0;
 
 	for_each_cpu(cpu, policy->cpus) {
@@ -1719,6 +1872,9 @@ static void sugov_limits(struct cpufreq_policy *policy)
 	struct sugov_policy *sg_policy = policy->governor_data;
 	unsigned long flags, now;
 	unsigned int freq;
+#ifdef CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD
+	s64 delta;
+#endif
 
 	if (!policy->fast_switch_enabled) {
 		mutex_lock(&sg_policy->work_lock);
@@ -1742,6 +1898,23 @@ static void sugov_limits(struct cpufreq_policy *policy)
 		sugov_fast_switch(sg_policy, now, freq);
 		raw_spin_unlock_irqrestore(&sg_policy->update_lock, flags);
 	}
+
+#ifdef CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD
+	if (policy->min == policy->cpuinfo.max_freq &&
+	    policy->min > sg_policy->min_freq) {
+		sg_policy->start_time = ktime_get();
+		sg_policy->freq_locked = true;
+	} else if (sg_policy->freq_locked && policy->min < policy->max) {
+		now = ktime_get();
+		delta = ktime_to_ns(ktime_sub(now, sg_policy->start_time));
+		if (delta >= 8 * NSEC_PER_SEC)
+			pr_warn("policy%d's freq locked at max_freq for %lld(ns)",
+				cpumask_first(policy->related_cpus), delta);
+		sg_policy->freq_locked = false;
+	}
+	sg_policy->min_freq = policy->min;
+	sg_policy->after_limits_changed = true;
+#endif
 
 	sg_policy->limits_changed = true;
 }
