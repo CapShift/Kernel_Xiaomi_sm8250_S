@@ -18,6 +18,9 @@
 #include <linux/nodemask.h>
 #include <linux/mmdebug.h>
 #include <linux/android_kabi.h>
+#ifdef CONFIG_HW_XRECLAIMER
+#include <linux/xreclaimer_types.h>
+#endif
 
 #include <asm/mmu.h>
 
@@ -507,6 +510,10 @@ struct mm_struct {
 		atomic_long_t hugetlb_usage;
 #endif
 		struct work_struct async_put_work;
+
+#ifdef CONFIG_HW_XRECLAIMER
+		struct xreclaimer_mm mm_xreclaimer;
+#endif
 
 #if IS_ENABLED(CONFIG_HMM)
 		/* HMM needs to track a few things per mm */

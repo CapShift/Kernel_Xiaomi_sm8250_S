@@ -878,3 +878,5 @@ config EMERGENCY_MEMORY
 	 failure.
 
 endmenu
+
+source "mm/xreclaimer/Kconfig"
