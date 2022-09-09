@@ -48,6 +48,23 @@ module_param_named(fuse_boost, ht_fuse_boost, uint, 0664);
 static int fuse_debug;
 module_param_named(fuse_debug, fuse_debug, int, 0664);
 
+static inline bool is_fg(int uid)
+{
+	bool ret = false;
+	if (uid == -555)
+		ret = true;
+	return ret;
+}
+
+static inline int current_is_fg(void)
+{
+	int cur_uid;
+	cur_uid = current_uid().val;
+	if (is_fg(cur_uid))
+		return 1;
+	return 0;
+}
+
 static inline bool fuse_can_boost(void)
 {
 	int uid = current_uid().val;
