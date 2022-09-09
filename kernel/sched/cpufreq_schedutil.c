@@ -18,8 +18,6 @@
 #include <trace/events/sched.h>
 #include <linux/sched/sysctl.h>
 
-#include <trace/hooks/scheduler.h>
-
 #ifdef CONFIG_CPUFREQ_GOV_SCHEDUTIL_TARGET_LOAD
 /* Target load. Lower values result in higher CPU speeds. */
 #define DEFAULT_TARGET_LOAD 80
@@ -1691,16 +1689,11 @@ static int sugov_start(struct cpufreq_policy *policy)
 
 	for_each_cpu(cpu, policy->cpus) {
 		struct sugov_cpu *sg_cpu = &per_cpu(sugov_cpu, cpu);
-		void (*uu)(struct update_util_data *data, u64 time, unsigned int flags);
 
-		trace_cpufreq_start_hook(policy, uu);
-		if (uu)
-			cpufreq_add_update_util_hook(cpu, &sg_cpu->update_util, uu);
-		else
-			cpufreq_add_update_util_hook(cpu, &sg_cpu->update_util,
-					     	policy_is_shared(policy) ?
-								sugov_update_shared :
-								sugov_update_single);
+		cpufreq_add_update_util_hook(cpu, &sg_cpu->update_util,
+					     policy_is_shared(policy) ?
+							sugov_update_shared :
+							sugov_update_single);
 	}
 	return 0;
 }
