@@ -10,16 +10,4 @@ config SCHED_EXT_DEBUG
 	help
 	This will debug the features ported from the upstream.
 
-config CPU_FREQ_DEFAULT_GOV_SCHEDUTIL_PLUS
-	bool "schedutil_plus"
-	depends on SCHED_EXT
-	help
-	  This will provide a improved version of schedutil governor.
-
-config CPUFREQ_GOV_SCHEDUTIL_SINGLE_PERF
-	tristate "'schedutil' extra function"
-	depends on SCHED_EXT
-	help
-	  This will expand the functions of schedutil governor.
-
 source "drivers/voyager/sched/walt/Kconfig"

@@ -31,7 +31,7 @@
 #define em_estimate_energy(cost, sum_util, scale_cpu) \
 	(((cost) * (sum_util)) / (scale_cpu))
 
-inline unsigned long map_util_perf(unsigned long util)
+static inline unsigned long map_util_perf(unsigned long util)
 {
 	return util + (util >> 2);
 }

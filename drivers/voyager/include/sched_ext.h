@@ -23,21 +23,6 @@ static inline struct cfs_rq *cfs_rq_of(struct sched_entity *se)
 	return se->cfs_rq;
 }
 
-/* Is the rq being capped/throttled by uclamp_max? */
-static inline bool uclamp_rq_is_capped(struct rq *rq)
-{
-	unsigned long rq_util;
-	unsigned long max_util;
-
-	if (!static_branch_likely(&sched_uclamp_used))
-		return false;
-
-	rq_util = cpu_util_cfs(cpu_of(rq)) + cpu_util_rt(rq);
-	max_util = READ_ONCE(rq->uclamp[UCLAMP_MAX].value);
-
-	return max_util != SCHED_CAPACITY_SCALE && rq_util >= max_util;
-}
-
 extern cpumask_t **cpu_array;
 extern int cpu_l2_sibling[NR_CPUS];
 extern unsigned int create_util_to_cost_stat;
@@ -53,10 +38,6 @@ extern inline bool task_demand_fits(struct task_struct *p, int cpu);
 extern inline bool task_fits_capacity(struct task_struct *p,
 					long capacity,
 					int cpu);
-extern inline unsigned long map_util_perf(unsigned long util);
 extern inline unsigned long em_cpu_energy(struct em_perf_domain *pd,
 				unsigned long max_util, unsigned long sum_util,
 				unsigned long allowed_cpu_cap);
-extern unsigned long effective_cpu_util(int cpu, unsigned long util_cfs,
-				 enum schedutil_type type,
-				 struct task_struct *p);
