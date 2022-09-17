@@ -37,9 +37,7 @@
 #include <uapi/linux/android/binder.h>
 #endif
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)) || defined(CONFIG_DAMON)
 #include <linux/pagewalk.h>
-#endif
 
 static bool g_module_initialized;
 static struct s_ws_collector *g_collector;
@@ -360,11 +358,7 @@ static int workingset_clear_pte_young_of_process(int pid)
 	struct mm_struct *mm = NULL;
 	struct vm_area_struct *vma = NULL;
 	struct mm_walk clear_young_walk = {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)) || defined(CONFIG_DAMON)
 	.ops = &(struct mm_walk_ops){.pmd_entry = clear_pte_young_range},
-#else
-	.pmd_entry = clear_pte_young_range,
-#endif
 };
 	struct s_clear_param cp;
 
@@ -395,13 +389,8 @@ static int workingset_clear_pte_young_of_process(int pid)
 			continue;
 
 		cp.vma = vma;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)) || defined(CONFIG_DAMON)
 		walk_page_range(
 			mm, vma->vm_start, vma->vm_end, clear_young_walk.ops, clear_young_walk.private);
-#else
-		walk_page_range(
-			vma->vm_start, vma->vm_end, &clear_young_walk);
-#endif
 	}
 	/*
 	 * Entries with the Access flag set to 0 are never held in the TLB,
