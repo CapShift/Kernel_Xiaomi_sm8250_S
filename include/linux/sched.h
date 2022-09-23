@@ -1393,9 +1393,6 @@ struct task_struct {
 #ifdef CONFIG_PERF_CRITICAL_RT_TASK
 	unsigned int    		critical_rt_task;
 #endif
-#ifdef CONFIG_SF_BINDER
-	unsigned int			sf_binder_task;
-#endif
 #ifdef CONFIG_KASAN
 	unsigned int			kasan_depth;
 #endif
