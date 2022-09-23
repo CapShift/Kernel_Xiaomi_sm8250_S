@@ -237,6 +237,4 @@ source "drivers/energy_model/Kconfig"
 
 source "drivers/voyager/Kconfig"
 
-source "drivers/mihw/Kconfig"
-
 endmenu
