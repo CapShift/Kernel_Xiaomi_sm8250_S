@@ -827,6 +827,8 @@ menuconfig CGROUPS
 
 if CGROUPS
 
+source "kernel/cgroup_workingset/Kconfig"
+
 config PAGE_COUNTER
        bool
 
