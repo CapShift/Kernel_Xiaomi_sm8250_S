@@ -621,6 +621,31 @@ void fd_install(unsigned int fd, struct file *file)
 
 EXPORT_SYMBOL(fd_install);
 
+/**
+ * pick_file - return file associatd with fd
+ * @files: file struct to retrieve file from
+ * @fd: file descriptor to retrieve file for
+ *
+ * Context: files_lock must be held.
+ *
+ * Returns: The file associated with @fd (NULL if @fd is not open)
+ */
+static struct file *pick_file(struct files_struct *files, unsigned fd)
+{
+	struct fdtable *fdt = files_fdtable(files);
+	struct file *file;
+
+	if (fd >= fdt->max_fds)
+		return NULL;
+
+	file = fdt->fd[fd];
+	if (file) {
+		rcu_assign_pointer(fdt->fd[fd], NULL);
+		__put_unused_fd(files, fd);
+	}
+	return file;
+}
+
 /*
  * The same warnings as for __alloc_fd()/__fd_install() apply here...
  */
@@ -649,33 +674,18 @@ EXPORT_SYMBOL(__close_fd); /* for ksys_close() */
 
 /*
  * variant of close_fd that gets a ref on the file for later fput.
- * The caller must ensure that filp_close() called on the file, and then
- * an fput().
+ * The caller must ensure that filp_close() called on the file.
  */
-int close_fd_get_file(unsigned int fd, struct file **res)
+struct file *close_fd_get_file(unsigned int fd)
 {
 	struct files_struct *files = current->files;
 	struct file *file;
-	struct fdtable *fdt;
 
 	spin_lock(&files->file_lock);
-	fdt = files_fdtable(files);
-	if (fd >= fdt->max_fds)
-		goto out_unlock;
-	file = fdt->fd[fd];
-	if (!file)
-		goto out_unlock;
-	rcu_assign_pointer(fdt->fd[fd], NULL);
-	__put_unused_fd(files, fd);
+	file = pick_file(files, fd);
 	spin_unlock(&files->file_lock);
-	get_file(file);
-	*res = file;
-	return 0;
 
-out_unlock:
-	spin_unlock(&files->file_lock);
-	*res = NULL;
-	return -ENOENT;
+	return file;
 }
 
 void do_close_on_exec(struct files_struct *files)
