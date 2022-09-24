@@ -1390,6 +1390,9 @@ struct task_struct {
 	unsigned int			inherit_top_app;
 	unsigned int    		critical_task;
 #endif
+#ifdef CONFIG_PERF_CRITICAL_RT_TASK
+	unsigned int    		critical_rt_task;
+#endif
 #ifdef CONFIG_KASAN
 	unsigned int			kasan_depth;
 #endif
