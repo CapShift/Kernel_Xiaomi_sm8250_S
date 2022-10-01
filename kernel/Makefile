@@ -159,6 +159,9 @@ endif
 ifeq ($(CONFIG_BOARD_PSYCHE),y)
 $(obj)/config_data.gz: arch/arm64/configs/psyche-stock_defconfig FORCE
 endif
+ifeq ($(CONFIG_BOARD_ELISH),y)
+$(obj)/config_data.gz: arch/arm64/configs/elish-stock_defconfig FORCE
+endif
 	$(call if_changed,gzip)
 
       filechk_ikconfiggz = (echo "static const char kernel_config_data[] __used = MAGIC_START"; cat $< | scripts/bin2c; echo "MAGIC_END;")
