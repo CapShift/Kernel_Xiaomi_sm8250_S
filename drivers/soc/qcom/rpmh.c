@@ -17,6 +17,7 @@
 #include <linux/spinlock.h>
 #include <linux/types.h>
 #include <linux/wait.h>
+#include <linux/delay.h>
 
 #include <soc/qcom/rpmh.h>
 
