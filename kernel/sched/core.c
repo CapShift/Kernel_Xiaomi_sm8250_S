@@ -1494,7 +1494,7 @@ static inline void enqueue_task(struct rq *rq, struct task_struct *p, int flags)
 	uclamp_rq_inc(rq, p);
 	p->sched_class->enqueue_task(rq, p, flags);
 	walt_update_last_enqueue(p);
-#ifdef CONFIG_MGT
+#ifdef CONFIG_MIGT
 	migt_monitor_hook(1, rq->cpu, p, sched_ktime_clock());
 #endif
 	trace_sched_enq_deq_task(p, 1, cpumask_bits(&p->cpus_allowed)[0]);
