@@ -36,7 +36,9 @@ function overwrite_config() {
 		-e	PACKAGE_RUNTIME_INFO	\
 		-e	MIGT			\
 		-e	MIGT_ENERGY_MODEL	\
-		-d	UNICODE
+		-d	UNICODE			\
+		-d	MSM_PERFORMANCE		\
+		-d	SCHED_CORE_CTL
 }
 
 # Use it to change the path or name of your extra script
