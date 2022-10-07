@@ -33,9 +33,6 @@ function overwrite_config() {
 		-e	MIHW			\
 		-e	PERF_CRITICAL_RT_TASK	\
 		-e	SF_BINDER		\
-		-e	PACKAGE_RUNTIME_INFO	\
-		-e	MIGT			\
-		-e	MIGT_ENERGY_MODEL	\
 		-d	UNICODE			\
 		-d	MSM_PERFORMANCE		\
 		-d	SCHED_CORE_CTL
