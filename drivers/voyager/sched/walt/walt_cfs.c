@@ -928,13 +928,13 @@ walt_select_task_rq_fair(void *unused, struct task_struct *p, int prev_cpu,
 
 	sync = (wake_flags & WF_SYNC) && !(current->flags & PF_EXITING);
 
+#ifdef CONFIG_PACKAGE_RUNTIME_INFO
 	if (static_branch_unlikely(&sched_energy_present)) {
 		rcu_read_lock();
-#ifdef CONFIG_PACKAGE_RUNTIME_INFO
 		wake_render(p);
-#endif
 		rcu_read_unlock();
 	}
+#endif
 
 #ifdef CONFIG_MIGT
 	if (game_vip_task(p) || game_super_task(p))

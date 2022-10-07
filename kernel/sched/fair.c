@@ -20,12 +20,10 @@
  *  Adaptive scheduling granularity, math enhancements by Peter Zijlstra
  *  Copyright (C) 2007 Red Hat, Inc., Peter Zijlstra
  */
-#include "sched.h"
+#include <linux/walt_extend.h>
 
 #include <trace/events/sched.h>
 #include <trace/hooks/sched.h>
-
-#include "walt.h"
 
 #ifdef CONFIG_SMP
 #endif /* CONFIG_SMP */
@@ -332,12 +330,6 @@ static inline struct task_struct *task_of(struct sched_entity *se)
 static inline struct cfs_rq *task_cfs_rq(struct task_struct *p)
 {
 	return p->se.cfs_rq;
-}
-
-/* runqueue on which this entity is (to be) queued */
-static inline struct cfs_rq *cfs_rq_of(struct sched_entity *se)
-{
-	return se->cfs_rq;
 }
 
 /* runqueue "owned" by this group */
@@ -7957,6 +7949,7 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_f
 	int new_cpu = prev_cpu;
 	int want_affine = 0;
 	int sync = (wake_flags & WF_SYNC) && !(current->flags & PF_EXITING);
+#if 0
 	int target_cpu = -1;
 
 	if (trace_android_rvh_select_task_rq_fair_enabled() &&
@@ -7966,10 +7959,11 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_f
 			wake_flags, &target_cpu);
 	if (target_cpu >= 0)
 		return target_cpu;
+#endif
 
 	if (static_branch_unlikely(&sched_energy_present)) {
 		rcu_read_lock();
-		new_cpu = find_energy_efficient_cpu(p, prev_cpu, sync,
+		new_cpu = walt_find_energy_efficient_cpu(p, prev_cpu, sync,
 						    sibling_count_hint);
 		if (unlikely(new_cpu < 0))
 			new_cpu = prev_cpu;
@@ -7984,7 +7978,7 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_f
 			if (uclamp_latency_sensitive(p) && !sched_feat(EAS_PREFER_IDLE) && !sync)
 				goto sd_loop;
 
-			new_cpu = find_energy_efficient_cpu(p, prev_cpu, sync,
+			new_cpu = walt_find_energy_efficient_cpu(p, prev_cpu, sync,
 							    sibling_count_hint);
 			if (new_cpu >= 0)
 				return new_cpu;

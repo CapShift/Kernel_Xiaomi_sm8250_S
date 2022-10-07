@@ -16,6 +16,9 @@ extern int walt_init_stop_handler(struct ctl_table *table, int write,
 				       void __user *buffer, size_t *lenp,
 				       loff_t *ppos);
 
+extern int walt_find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
+				     int sync, int sibling_count_hint);
+
 extern void walt_cfs_init(void);
 
 extern bool walt_disabled;
