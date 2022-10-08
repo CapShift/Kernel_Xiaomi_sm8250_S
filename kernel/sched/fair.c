@@ -6937,9 +6937,9 @@ static void find_best_target(struct sched_domain *sd, cpumask_t *cpus,
 	int isolated_candidate = -1;
 	unsigned int target_nr_rtg_high_prio = UINT_MAX;
 	bool rtg_high_prio_task = task_rtg_high_prio(p);
-#ifdef CONFIG_MIHW
 	struct root_domain *rd;
 
+#ifdef CONFIG_MIGT
 	if (!prefer_idle)
 		prefer_idle = !!game_vip_task(p);
 #endif
