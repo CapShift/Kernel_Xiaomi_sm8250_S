@@ -473,8 +473,12 @@ int dsi_panel_parse_mi_config(struct dsi_panel *panel,
 	}
 
 #ifndef CONFIG_DISABLE_MI_FOD_DIMLAYER
+#ifdef CONFIG_BOARD_PSYCHE
+	mi_cfg->fod_dimlayer_enabled = false;
+#else
 	mi_cfg->fod_dimlayer_enabled = utils->read_bool(of_node,
 		"mi,mdss-dsi-panel-fod-dimlayer-enabled");
+#endif
 #else
 	mi_cfg->fod_dimlayer_enabled = false;
 #endif
