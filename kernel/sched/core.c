@@ -4077,6 +4077,11 @@ void scheduler_tick(void)
 	if (curr->sched_class == &fair_sched_class)
 		check_for_migration(rq, curr);
 
+#ifdef CONFIG_HW_RT_ACTIVE_LB
+	if (curr->sched_class == &rt_sched_class)
+		check_for_rt_migration(rq, curr);
+#endif
+
 #ifdef CONFIG_SMP
 	rq_lock(rq, &rf);
 	if (idle_cpu(cpu) && is_reserved(cpu) && !rq->active_balance)
