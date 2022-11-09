@@ -37,6 +37,8 @@
  */
 #define PAGE_ALLOC_COSTLY_ORDER 3
 
+#define MAX_KSWAPD_THREADS 16
+
 enum migratetype {
 	MIGRATE_UNMOVABLE,
 	MIGRATE_MOVABLE,
@@ -913,7 +915,7 @@ typedef struct pglist_data {
 	int node_id;
 	wait_queue_head_t kswapd_wait;
 	wait_queue_head_t pfmemalloc_wait;
-	struct task_struct *kswapd;	/* Protected by
+	struct task_struct *kswapd[MAX_KSWAPD_THREADS]; 	/* Protected by
 					   mem_hotplug_begin/end() */
 	int kswapd_order;
 	enum zone_type kswapd_classzone_idx;
