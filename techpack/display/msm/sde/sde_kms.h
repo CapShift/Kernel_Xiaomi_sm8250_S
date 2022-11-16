@@ -49,10 +49,7 @@
  */
 #define SDE_DEBUG(fmt, ...)                                                \
 	do {                                                               \
-		if (unlikely(drm_debug & DRM_UT_KMS))                      \
-			DRM_DEBUG(fmt, ##__VA_ARGS__); \
-		else                                                       \
-			pr_debug(fmt, ##__VA_ARGS__);                      \
+		pr_debug(fmt, ##__VA_ARGS__);                      \
 	} while (0)
 
 /**
@@ -73,10 +70,7 @@
  */
 #define SDE_DEBUG_DRIVER(fmt, ...)                                         \
 	do {                                                               \
-		if (unlikely(drm_debug & DRM_UT_DRIVER))                   \
-			DRM_ERROR(fmt, ##__VA_ARGS__); \
-		else                                                       \
-			pr_debug(fmt, ##__VA_ARGS__);                      \
+		pr_debug(fmt, ##__VA_ARGS__);                      \
 	} while (0)
 
 #define SDE_ERROR(fmt, ...) pr_err("[sde error]" fmt, ##__VA_ARGS__)
@@ -298,10 +292,7 @@ struct sde_kms {
 	bool first_kickoff;
 	bool qdss_enabled;
 
-	cpumask_t irq_cpu_mask;
 	struct pm_qos_request pm_qos_irq_req;
-	struct irq_affinity_notify affinity_notify;
-	bool pm_qos_irq_req_en;
 };
 
 /**
@@ -663,6 +654,8 @@ void sde_kms_timeline_status(struct drm_device *dev);
  * return: 0 on success; error code otherwise
  */
 int sde_kms_handle_recovery(struct drm_encoder *encoder);
+
+void sde_kms_kickoff_count(struct sde_kms *sde_kms);
 
 /**
  * sde_kms_update_pm_qos_irq_request - Update Qos vote for CPU receiving
