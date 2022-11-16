@@ -39,22 +39,13 @@ static struct fuse_dev *fuse_get_dev(struct file *file)
 }
 
 #ifdef CONFIG_FUSE_SHORTCIRCUIT
-#include <linux/cred.h>
-extern unsigned int ht_fuse_boost;
-
 unsigned int ht_fuse_boost = 2;
 module_param_named(fuse_boost, ht_fuse_boost, uint, 0664);
 
 static int fuse_debug;
 module_param_named(fuse_debug, fuse_debug, int, 0664);
 
-static inline bool is_fg(int uid)
-{
-	bool ret = false;
-	if (uid == -555)
-		ret = true;
-	return ret;
-}
+extern bool is_fg(int uid);
 
 static inline int current_is_fg(void)
 {
