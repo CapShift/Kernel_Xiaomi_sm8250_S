@@ -71,21 +71,28 @@ static inline bool fuse_can_boost(void)
 	if (ht_fuse_boost == 2 && uid < 10000)
 		return true;
 
+	// Always boost
+	if (ht_fuse_boost == 3)
+		return true;
+
 	return false;
 }
 
 static inline void fuse_boost_init(struct fuse_req *req)
 {
+	bool can_boost = fuse_can_boost();
+
 	clear_bit(FR_BOOST, &req->flags);
 
-	if (fuse_can_boost())
+	if (can_boost)
 		__set_bit(FR_BOOST, &req->flags);
 
 	if (fuse_debug) {
 		int uid = current_uid().val;
 
-		pr_info("current %s %d, fg: %d, uid: %d\n",
-			current->comm, current->pid, current_is_fg(), uid);
+		pr_info("%s: current %s, pid: %d, uid: %d, is_fg: %d, boost: %d\n",
+			__func__, current->comm, current->pid,
+			uid, current_is_fg(), can_boost);
 	}
 }
 
