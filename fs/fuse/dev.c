@@ -78,6 +78,23 @@ out:
 	return rc;
 }
 
+static inline bool fuse_in_boost_whitelist(void)
+{
+	struct task_struct *group_leader = current->group_leader;
+	char group_leader_comm[sizeof(group_leader->comm)];
+
+	get_task_comm(group_leader_comm, group_leader);
+
+	if (fuse_debug) {
+		pr_info("%s: group_leader_comm: %s, group_leader_pid: %d\n",
+			__func__, group_leader_comm, group_leader->pid);
+	}
+
+	return !strcmp(group_leader_comm, "externalstorage") ||  // com.android.externalstorage
+	       !strcmp(group_leader_comm, "oid.documentsui") ||  // com.android.documentsui
+	       !strcmp(group_leader_comm, "d.process.media");    // android.process.media
+}
+
 static inline bool fuse_can_boost(void)
 {
 	int uid = current_uid().val;
@@ -85,16 +102,16 @@ static inline bool fuse_can_boost(void)
 	if (!ht_fuse_boost)
 		return false;
 
+	// Always boost
+	if (ht_fuse_boost == 3)
+		return true;
+
 	// fuse_boost enabled and is foreground request
 	if (ht_fuse_boost >= 1 && current_is_fg())
 		return true;
 
 	// fuse_boost enabled and is system request (include foreground request)
-	if (ht_fuse_boost == 2 && uid < 10000)
-		return true;
-
-	// Always boost
-	if (ht_fuse_boost == 3)
+	if (ht_fuse_boost == 2 && (uid < 10000 || fuse_in_boost_whitelist()))
 		return true;
 
 	return false;
