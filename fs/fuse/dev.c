@@ -45,21 +45,37 @@ module_param_named(fuse_boost, ht_fuse_boost, uint, 0664);
 static int fuse_debug;
 module_param_named(fuse_debug, fuse_debug, int, 0664);
 
-static inline bool is_fg(int uid)
-{
-	bool ret = false;
-	if (uid == -555)
-		ret = true;
-	return ret;
-}
-
 static inline int current_is_fg(void)
 {
-	int cur_uid;
-	cur_uid = current_uid().val;
-	if (is_fg(cur_uid))
-		return 1;
-	return 0;
+	int rc = 0;
+#ifdef CONFIG_CPUSETS
+	char *buf;
+	struct cgroup_subsys_state *css;
+	int retval = -ENOMEM;
+#endif
+
+	if (current->signal->oom_score_adj != 0)
+		goto out;
+
+#ifdef CONFIG_CPUSETS
+	buf = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!buf)
+		goto out;
+	css = task_get_css(current, cpuset_cgrp_id);
+	retval = cgroup_path_ns(css->cgroup, buf, PATH_MAX,
+				current->nsproxy->cgroup_ns);
+	css_put(css);
+	if (retval < 0)
+		goto out_free;
+	if (!strcmp(buf, "/top-app"))
+		rc = 1;
+out_free:
+	kfree(buf);
+#else
+	rc = 1;
+#endif
+out:
+	return rc;
 }
 
 static inline bool fuse_can_boost(void)
@@ -70,7 +86,7 @@ static inline bool fuse_can_boost(void)
 		return false;
 
 	// fuse_boost enabled and is foreground request
-	if (ht_fuse_boost >= 1 && is_fg(uid))
+	if (ht_fuse_boost >= 1 && current_is_fg())
 		return true;
 
 	// fuse_boost enabled and is system request (include foreground request)
