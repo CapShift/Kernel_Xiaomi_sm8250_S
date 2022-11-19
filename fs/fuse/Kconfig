@@ -20,7 +20,6 @@ config FUSE_FS
 config FUSE_SHORTCIRCUIT
 	bool "OnePlus FUSE Optimization"
 	depends on FUSE_FS
-	depends on OPPO_FG_OPT
 	help
 	  An optimization for better /sdcard/ performance on Android by OnePlus.
 

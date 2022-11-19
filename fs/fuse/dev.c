@@ -45,7 +45,13 @@ module_param_named(fuse_boost, ht_fuse_boost, uint, 0664);
 static int fuse_debug;
 module_param_named(fuse_debug, fuse_debug, int, 0664);
 
-extern bool is_fg(int uid);
+static inline bool is_fg(int uid)
+{
+	bool ret = false;
+	if (uid == -555)
+		ret = true;
+	return ret;
+}
 
 static inline int current_is_fg(void)
 {
