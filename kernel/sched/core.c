@@ -4036,15 +4036,12 @@ void scheduler_tick(void)
 	struct rq_flags rf;
 	u64 wallclock;
 	bool early_notif;
-	u32 old_load;
-	struct related_thread_group *grp;
 	unsigned int flag = 0;
 
 	sched_clock_tick();
 
 	rq_lock(rq, &rf);
 
-	old_load = task_load(curr);
 	set_window_start(rq);
 	wallclock = sched_ktime_clock();
 	update_task_ravg(rq->curr, rq, TASK_UPDATE, wallclock, 0);
@@ -4068,14 +4065,7 @@ void scheduler_tick(void)
 	trigger_load_balance(rq);
 #endif
 
-	rcu_read_lock();
-	grp = task_related_thread_group(curr);
-	if (update_preferred_cluster(grp, curr, old_load, true))
-		set_preferred_cluster(grp);
-	rcu_read_unlock();
-
-	if (curr->sched_class == &fair_sched_class)
-		check_for_migration(rq, curr);
+	android_scheduler_tick(rq);
 
 #ifdef CONFIG_HW_RT_ACTIVE_LB
 	if (curr->sched_class == &rt_sched_class)
@@ -4083,10 +4073,7 @@ void scheduler_tick(void)
 #endif
 
 #ifdef CONFIG_SMP
-	rq_lock(rq, &rf);
-	if (idle_cpu(cpu) && is_reserved(cpu) && !rq->active_balance)
-		clear_reserved(cpu);
-	rq_unlock(rq, &rf);
+	walt_lb_tick(rq);
 #endif
 
 }

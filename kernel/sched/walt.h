@@ -311,7 +311,7 @@ static inline void walt_update_last_enqueue(struct task_struct *p)
 {
 	p->last_enqueued_ts = sched_ktime_clock();
 }
-extern void walt_rotate_work_init(void);
+extern void walt_lb_rotate_work_init(void);
 extern void walt_rotation_checkpoint(int nr_big);
 extern unsigned int walt_rotation_enabled;
 extern void walt_fill_ta_data(struct core_ctl_notif_data *data);
@@ -571,4 +571,16 @@ static inline unsigned int walt_nr_rtg_high_prio(int cpu)
 }
 #endif /* CONFIG_SCHED_WALT */
 
+/*
+ * The policy of a RT boosted task (via PI mutex) still indicates it is
+ * a fair task, so use prio check as well. The prio check alone is not
+ * sufficient since idle task also has 120 priority.
+ */
+static inline bool walt_fair_task(struct task_struct *p)
+{
+	return p->prio >= MAX_RT_PRIO && !is_idle_task(p);
+}
+
+extern void walt_lb_tick(struct rq *rq);
+extern void android_scheduler_tick(struct rq *rq);
 #endif
