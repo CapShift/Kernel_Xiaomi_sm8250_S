@@ -28,11 +28,11 @@
 #include <linux/file.h>
 #include <linux/writeback.h>
 #include <linux/blkdev.h>
-#include <linux/rmap.h>
 #include <linux/buffer_head.h>	/* for try_to_release_page(),
 					buffer_heads_over_limit */
 #include <linux/mm_inline.h>
 #include <linux/backing-dev.h>
+#include <linux/rmap.h>
 #include <linux/topology.h>
 #include <linux/cpu.h>
 #include <linux/cpuset.h>
@@ -57,9 +57,6 @@
 #include <linux/shmem_fs.h>
 #include <linux/ctype.h>
 #include <linux/debugfs.h>
-#ifdef CONFIG_HYPERHOLD
-#include <linux/memcg_policy.h>
-#endif
 
 #include <asm/tlbflush.h>
 #include <asm/div64.h>
@@ -78,6 +75,80 @@
 #define DEF_KSWAPD_THREADS_PER_NODE 6
 int kswapd_threads = DEF_KSWAPD_THREADS_PER_NODE;
 int kswapd_threads_current = DEF_KSWAPD_THREADS_PER_NODE;
+
+struct scan_control {
+	/* How many pages shrink_list() should reclaim */
+	unsigned long nr_to_reclaim;
+
+	/*
+	 * Nodemask of nodes allowed by the caller. If NULL, all nodes
+	 * are scanned.
+	 */
+	nodemask_t	*nodemask;
+
+	/*
+	 * The memory cgroup that hit its limit and as a result is the
+	 * primary target of this reclaim invocation.
+	 */
+	struct mem_cgroup *target_mem_cgroup;
+
+	/* Writepage batching in laptop mode; RECLAIM_WRITE */
+	unsigned int may_writepage:1;
+
+	/* Can mapped pages be reclaimed? */
+	unsigned int may_unmap:1;
+
+	/* Can pages be swapped as part of reclaim? */
+	unsigned int may_swap:1;
+
+	/*
+	 * Cgroups are not reclaimed below their configured memory.low,
+	 * unless we threaten to OOM. If any cgroups are skipped due to
+	 * memory.low and nothing was reclaimed, go back for memory.low.
+	 */
+	unsigned int memcg_low_reclaim:1;
+	unsigned int memcg_low_skipped:1;
+
+	unsigned int hibernation_mode:1;
+
+	/* One of the zones is ready for compaction */
+	unsigned int compaction_ready:1;
+
+#ifdef CONFIG_LRU_GEN
+	/* help make better choices when multiple memcgs are available */
+	unsigned int memcgs_need_aging:1;
+	unsigned int memcgs_need_swapping:1;
+	unsigned int memcgs_avoid_swapping:1;
+#endif
+
+	/* Allocation order */
+	s8 order;
+
+	/* Scan (total_size >> priority) pages at once */
+	s8 priority;
+
+	/* The highest zone to isolate pages for reclaim from */
+	s8 reclaim_idx;
+
+	/* This context's GFP mask */
+	gfp_t gfp_mask;
+
+	/* Incremented by the number of inactive pages that were scanned */
+	unsigned long nr_scanned;
+
+	/* Number of pages freed so far during a call to shrink_zones() */
+	unsigned long nr_reclaimed;
+
+	struct {
+		unsigned int dirty;
+		unsigned int unqueued_dirty;
+		unsigned int congested;
+		unsigned int writeback;
+		unsigned int immediate;
+		unsigned int file_taken;
+		unsigned int taken;
+	} nr;
+};
 
 #ifdef ARCH_HAS_PREFETCH
 #define prefetch_prev_lru_page(_page, _base, _field)			\
@@ -185,11 +256,7 @@ static void unregister_memcg_shrinker(struct shrinker *shrinker)
 #endif /* CONFIG_MEMCG_KMEM */
 
 #ifdef CONFIG_MEMCG
-#ifdef CONFIG_HYPERHOLD
-bool global_reclaim(struct scan_control *sc)
-#else
 static bool global_reclaim(struct scan_control *sc)
-#endif
 {
 	return !sc->target_mem_cgroup;
 }
@@ -207,11 +274,7 @@ static bool global_reclaim(struct scan_control *sc)
  * This function tests whether the vmscan currently in progress can assume
  * that the normal dirty throttling mechanism is operational.
  */
-#ifdef CONFIG_HYPERHOLD
-bool sane_reclaim(struct scan_control *sc)
-#else
 static bool sane_reclaim(struct scan_control *sc)
-#endif
 {
 	struct mem_cgroup *memcg = sc->target_mem_cgroup;
 
@@ -224,11 +287,7 @@ static bool sane_reclaim(struct scan_control *sc)
 	return false;
 }
 
-#ifdef CONFIG_HYPERHOLD
-void set_memcg_congestion(pg_data_t *pgdat,
-#else
 static void set_memcg_congestion(pg_data_t *pgdat,
-#endif
 				struct mem_cgroup *memcg,
 				bool congested)
 {
@@ -241,11 +300,7 @@ static void set_memcg_congestion(pg_data_t *pgdat,
 	WRITE_ONCE(mn->congested, congested);
 }
 
-#ifdef CONFIG_HYPERHOLD
-bool memcg_congested(pg_data_t *pgdat,
-#else
 static bool memcg_congested(pg_data_t *pgdat,
-#endif
 			struct mem_cgroup *memcg)
 {
 	struct mem_cgroup_per_node *mn;
@@ -635,11 +690,7 @@ static unsigned long shrink_slab_memcg(gfp_t gfp_mask, int nid,
  *
  * Returns the number of reclaimed slab objects.
  */
-#ifdef CONFIG_HYPERHOLD
-unsigned long shrink_slab(gfp_t gfp_mask, int nid,
-#else
 static unsigned long shrink_slab(gfp_t gfp_mask, int nid,
-#endif
 				 struct mem_cgroup *memcg,
 				 int priority)
 {
@@ -1069,11 +1120,7 @@ static void page_check_dirty_writeback(struct page *page,
 /*
  * shrink_page_list() returns the number of reclaimed pages
  */
-#ifdef CONFIG_HYPERHOLD
-unsigned long shrink_page_list(struct list_head *page_list,
-#else
 static unsigned long shrink_page_list(struct list_head *page_list,
-#endif
 				      struct pglist_data *pgdat,
 				      struct scan_control *sc,
 				      enum ttu_flags ttu_flags,
@@ -1113,12 +1160,6 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 		VM_BUG_ON_PAGE(PageActive(page), page);
 
 		sc->nr_scanned++;
-#ifdef CONFIG_HYPERHOLD
-		if (page_is_file_cache(page))
-			sc->nr_scanned_file++;
-		else
-			sc->nr_scanned_anon++;
-#endif
 
 		if (unlikely(!page_evictable(page)))
 			goto activate_locked;
@@ -1703,11 +1744,7 @@ static __always_inline void update_lru_sizes(struct lruvec *lruvec,
  *
  * returns how many pages were moved onto *@dst.
  */
-#ifdef CONFIG_HYPERHOLD
-unsigned long isolate_lru_pages(unsigned long nr_to_scan,
-#else
 static unsigned long isolate_lru_pages(unsigned long nr_to_scan,
-#endif
 		struct lruvec *lruvec, struct list_head *dst,
 		unsigned long *nr_scanned, struct scan_control *sc,
 		isolate_mode_t mode, enum lru_list lru)
@@ -1933,11 +1970,7 @@ putback_inactive_pages(struct lruvec *lruvec, struct list_head *page_list)
  * In that case we should only throttle if the backing device it is
  * writing to is congested.  In other cases it is safe to throttle.
  */
-#ifdef CONFIG_HYPERHOLD
-int current_may_throttle(void)
-#else
 static int current_may_throttle(void)
-#endif
 {
 	return !(current->flags & PF_LESS_THROTTLE) ||
 		current->backing_dev_info == NULL ||
@@ -1948,11 +1981,7 @@ static int current_may_throttle(void)
  * shrink_inactive_list() is a helper for shrink_node().  It returns the number
  * of reclaimed pages
  */
-#ifdef CONFIG_HYPERHOLD
-unsigned long
-#else
 static noinline_for_stack unsigned long
-#endif
 shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 		     struct scan_control *sc, enum lru_list lru)
 {
@@ -2082,11 +2111,8 @@ shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
  *
  * Returns the number of pages moved to the given lru.
  */
-#ifdef CONFIG_HYPERHOLD
-unsigned move_active_pages_to_lru(struct lruvec *lruvec,
-#else
+
 static unsigned move_active_pages_to_lru(struct lruvec *lruvec,
-#endif
 				     struct list_head *list,
 				     struct list_head *pages_to_free,
 				     enum lru_list lru)
@@ -2142,11 +2168,11 @@ static void shrink_active_list(unsigned long nr_to_scan,
 	LIST_HEAD(l_inactive);
 	struct page *page;
 	struct zone_reclaim_stat *reclaim_stat = &lruvec->reclaim_stat;
-	struct pglist_data *pgdat = lruvec_pgdat(lruvec);
 	unsigned nr_deactivate, nr_activate;
 	unsigned nr_rotated = 0;
 	isolate_mode_t isolate_mode = 0;
 	int file = is_file_lru(lru);
+	struct pglist_data *pgdat = lruvec_pgdat(lruvec);
 
 	lru_add_drain();
 
@@ -2258,11 +2284,7 @@ static void shrink_active_list(unsigned long nr_to_scan,
  *    1TB     101        10GB
  *   10TB     320        32GB
  */
-#ifdef CONFIG_HYPERHOLD
-bool inactive_list_is_low(struct lruvec *lruvec, bool file,
-#else
 static bool inactive_list_is_low(struct lruvec *lruvec, bool file,
-#endif
 				 struct scan_control *sc, bool trace)
 {
 	enum lru_list active_lru = file * LRU_FILE + LRU_ACTIVE;
@@ -2308,11 +2330,7 @@ static bool inactive_list_is_low(struct lruvec *lruvec, bool file,
 	return inactive * inactive_ratio < active;
 }
 
-#ifdef CONFIG_HYPERHOLD
-unsigned long shrink_list(enum lru_list lru, unsigned long nr_to_scan,
-#else
 static unsigned long shrink_list(enum lru_list lru, unsigned long nr_to_scan,
-#endif
 				 struct lruvec *lruvec, struct scan_control *sc)
 {
 	if (is_active_lru(lru)) {
@@ -2323,6 +2341,13 @@ static unsigned long shrink_list(enum lru_list lru, unsigned long nr_to_scan,
 
 	return shrink_inactive_list(nr_to_scan, lruvec, sc, lru);
 }
+
+enum scan_balance {
+	SCAN_EQUAL,
+	SCAN_FRACT,
+	SCAN_ANON,
+	SCAN_FILE,
+};
 
 /*
  * Determine how aggressively the anon and file LRU lists should be
@@ -5178,7 +5203,7 @@ static void lru_gen_shrink_lruvec(struct lruvec *lruvec, struct scan_control *sc
 /*
  * This is a basic per-node page freer.  Used by both kswapd and direct reclaim.
  */
-void shrink_node_memcg(struct pglist_data *pgdat, struct mem_cgroup *memcg,
+static void shrink_node_memcg(struct pglist_data *pgdat, struct mem_cgroup *memcg,
 			      struct scan_control *sc, unsigned long *lru_pages)
 {
 	struct lruvec *lruvec = mem_cgroup_lruvec(pgdat, memcg);
@@ -5317,11 +5342,7 @@ static bool in_reclaim_compaction(struct scan_control *sc)
  * calls try_to_compact_zone() that it will have enough free pages to succeed.
  * It will give up earlier than that if there is difficulty reclaiming pages.
  */
-#ifdef CONFIG_HYPERHOLD
-inline bool should_continue_reclaim(struct pglist_data *pgdat,
-#else
 static inline bool should_continue_reclaim(struct pglist_data *pgdat,
-#endif
 					unsigned long nr_reclaimed,
 					unsigned long nr_scanned,
 					struct scan_control *sc)
@@ -5387,11 +5408,7 @@ static inline bool should_continue_reclaim(struct pglist_data *pgdat,
 	return true;
 }
 
-#ifdef CONFIG_HYPERHOLD
-bool pgdat_memcg_congested(pg_data_t *pgdat, struct mem_cgroup *memcg)
-#else
 static bool pgdat_memcg_congested(pg_data_t *pgdat, struct mem_cgroup *memcg)
-#endif
 {
 	return test_bit(PGDAT_CONGESTED, &pgdat->flags) ||
 		(memcg && memcg_congested(pgdat, memcg));
@@ -5951,9 +5968,6 @@ unsigned long try_to_free_pages(struct zonelist *zonelist, int order,
 		.may_writepage = !laptop_mode,
 		.may_unmap = 1,
 		.may_swap = 1,
-#ifdef CONFIG_HYPERHOLD
-		.invoker = DIRECT_RECLAIM,
-#endif
 	};
 
 	/*
@@ -5979,13 +5993,6 @@ unsigned long try_to_free_pages(struct zonelist *zonelist, int order,
 				sc.reclaim_idx);
 
 	nr_reclaimed = do_try_to_free_pages(zonelist, &sc);
-
-#ifdef CONFIG_HYPERHOLD
-	count_vm_events(DR_RECLAIMED_ANON, sc.nr_reclaimed_anon);
-	count_vm_events(DR_RECLAIMED_FILE, sc.nr_reclaimed_file);
-	count_vm_events(DR_SCAN_ANON, sc.nr_scanned_anon);
-	count_vm_events(DR_SCAN_FILE, sc.nr_scanned_file);
-#endif
 
 	trace_mm_vmscan_direct_reclaim_end(nr_reclaimed);
 	mm_event_end(MM_RECLAIM, event_ts);
@@ -6254,9 +6261,6 @@ static int balance_pgdat(pg_data_t *pgdat, int order, int classzone_idx)
 		.may_writepage = !laptop_mode,
 		.may_unmap = 1,
 		.may_swap = 1,
-#ifdef CONFIG_HYPERHOLD
-		.invoker = KSWAPD,
-#endif
 	};
 
 	psi_memstall_enter(&pflags);
@@ -6322,14 +6326,6 @@ static int balance_pgdat(pg_data_t *pgdat, int order, int classzone_idx)
 						sc.gfp_mask, &nr_soft_scanned);
 		sc.nr_reclaimed += nr_soft_reclaimed;
 
-#ifdef CONFIG_HYPERHOLD
-		/* If soft limit reclaiming has balance the node,
-		 * end kswapd now.
-		 */
-		if (pgdat_balanced(pgdat, sc.order, classzone_idx))
-			goto out;
-#endif
-
 		/*
 		 * There should be no need to raise the scanning priority if
 		 * enough pages are already being scanned that that high
@@ -6370,12 +6366,6 @@ out:
 	snapshot_refaults(NULL, pgdat);
 	__fs_reclaim_release();
 	psi_memstall_leave(&pflags);
-#ifdef CONFIG_HYPERHOLD
-	count_vm_events(KSWAPD_RECLAIMED_ANON, sc.nr_reclaimed_anon);
-	count_vm_events(KSWAPD_RECLAIMED_FILE, sc.nr_reclaimed_file);
-	count_vm_events(KSWAPD_SCAN_ANON, sc.nr_scanned_anon);
-	count_vm_events(KSWAPD_SCAN_FILE, sc.nr_scanned_file);
-#endif
 	/*
 	 * Return the order kswapd stopped reclaiming at as
 	 * prepare_kswapd_sleep() takes it into account. If another caller

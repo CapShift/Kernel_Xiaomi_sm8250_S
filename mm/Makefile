@@ -110,6 +110,5 @@ obj-$(CONFIG_PERCPU_STATS) += percpu-stats.o
 obj-$(CONFIG_HMM) += hmm.o
 obj-$(CONFIG_MEMFD_CREATE) += memfd.o
 obj-$(CONFIG_HW_XRECLAIMER) += xreclaimer/
-obj-$(CONFIG_HYPERHOLD) += memcg_reclaim.o
-obj-$(CONFIG_HYPERHOLD) += memcg_control.o
 CFLAGS_kmemleak.o += -DCONFIG_DEBUG_FS
+

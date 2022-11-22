@@ -337,7 +337,6 @@ void *workingset_eviction(struct address_space *mapping, struct page *page)
 		return lru_gen_eviction(page);
 
 	lruvec = mem_cgroup_lruvec(pgdat, memcg);
-
 	eviction = atomic_long_inc_return(&lruvec->inactive_age);
 	eviction >>= bucket_order;
 	return pack_shadow(memcgid, pgdat, eviction, PageWorkingset(page));
@@ -457,7 +456,6 @@ void workingset_activation(struct page *page)
 	if (!mem_cgroup_disabled() && !memcg)
 		goto out;
 	lruvec = mem_cgroup_lruvec(page_pgdat(page), memcg);
-
 	atomic_long_inc(&lruvec->inactive_age);
 out:
 	rcu_read_unlock();

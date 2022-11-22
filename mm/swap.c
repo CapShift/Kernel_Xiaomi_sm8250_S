@@ -267,9 +267,8 @@ static void update_page_reclaim_stat(struct lruvec *lruvec,
 	struct zone_reclaim_stat *reclaim_stat = &lruvec->reclaim_stat;
 
 	reclaim_stat->recent_scanned[file]++;
-	if (rotated) {
+	if (rotated)
 		reclaim_stat->recent_rotated[file]++;
-	}
 }
 
 static void __activate_page(struct page *page, struct lruvec *lruvec,

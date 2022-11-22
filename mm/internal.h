@@ -80,173 +80,17 @@ static inline void set_page_refcounted(struct page *page)
 
 extern unsigned long highest_memmap_pfn;
 
-#ifdef CONFIG_HYPERHOLD
-enum reclaim_invoker {
-	ALL,
-	KSWAPD,
-	ZSWAPD,
-	DIRECT_RECLAIM,
-	NODE_RECLAIM,
-	SOFT_LIMIT,
-	RCC_RECLAIM,
-	FILE_RECLAIM,
-	ANON_RECLAIM
-};
-#endif
-
-enum scan_balance {
-	SCAN_EQUAL,
-	SCAN_FRACT,
-	SCAN_ANON,
-	SCAN_FILE,
-};
-
-enum ttu_flags;
-
 /*
  * Maximum number of reclaim retries without progress before the OOM
  * killer is consider the only way forward.
  */
 #define MAX_RECLAIM_RETRIES 16
 
-struct scan_control {
-	/* How many pages shrink_list() should reclaim */
-	unsigned long nr_to_reclaim;
-
-	/*
-	 * Nodemask of nodes allowed by the caller. If NULL, all nodes
-	 * are scanned.
-	 */
-	nodemask_t	*nodemask;
-
-	/*
-	 * The memory cgroup that hit its limit and as a result is the
-	 * primary target of this reclaim invocation.
-	 */
-	struct mem_cgroup *target_mem_cgroup;
-
-	/* Writepage batching in laptop mode; RECLAIM_WRITE */
-	unsigned int may_writepage:1;
-
-	/* Can mapped pages be reclaimed? */
-	unsigned int may_unmap:1;
-
-	/* Can pages be swapped as part of reclaim? */
-	unsigned int may_swap:1;
-
-	/*
-	 * Cgroups are not reclaimed below their configured memory.low,
-	 * unless we threaten to OOM. If any cgroups are skipped due to
-	 * memory.low and nothing was reclaimed, go back for memory.low.
-	 */
-	unsigned int memcg_low_reclaim:1;
-	unsigned int memcg_low_skipped:1;
-
-	unsigned int hibernation_mode:1;
-
-	/* One of the zones is ready for compaction */
-	unsigned int compaction_ready:1;
-
-#ifdef CONFIG_LRU_GEN
-	/* help make better choices when multiple memcgs are available */
-	unsigned int memcgs_need_aging:1;
-	unsigned int memcgs_need_swapping:1;
-	unsigned int memcgs_avoid_swapping:1;
-#endif
-
-	/* Allocation order */
-	s8 order;
-
-	/* Scan (total_size >> priority) pages at once */
-	s8 priority;
-
-	/* The highest zone to isolate pages for reclaim from */
-	s8 reclaim_idx;
-
-	/* This context's GFP mask */
-	gfp_t gfp_mask;
-
-	/* Incremented by the number of inactive pages that were scanned */
-	unsigned long nr_scanned;
-
-	/* Number of pages freed so far during a call to shrink_zones() */
-	unsigned long nr_reclaimed;
-
-	struct {
-		unsigned int dirty;
-		unsigned int unqueued_dirty;
-		unsigned int congested;
-		unsigned int writeback;
-		unsigned int immediate;
-		unsigned int file_taken;
-		unsigned int taken;
-	} nr;
-
-#ifdef CONFIG_HYPERHOLD
-	enum reclaim_invoker invoker;
-	u32 isolate_count;
-	unsigned long nr_scanned_anon;
-	unsigned long nr_scanned_file;
-	unsigned long nr_reclaimed_anon;
-	unsigned long nr_reclaimed_file;
-#endif
-};
-
 /*
  * in mm/vmscan.c:
  */
-extern unsigned int enough_inactive_file;
-
 extern int isolate_lru_page(struct page *page);
 extern void putback_lru_page(struct page *page);
-#ifdef CONFIG_HYPERHOLD
-extern bool inactive_list_is_low(struct lruvec *lruvec, bool file,
-		struct scan_control *sc, bool trace);
-extern unsigned long isolate_lru_pages(unsigned long nr_to_scan,
-		struct lruvec *lruvec, struct list_head *dst,
-		unsigned long *nr_scanned, struct scan_control *sc,
-		isolate_mode_t mode, enum lru_list lru);
-extern unsigned int move_active_pages_to_lru(struct lruvec *lruvec,
-		struct list_head *list,
-		struct list_head *pages_to_free,
-		enum lru_list lru);
-extern unsigned long shrink_page_list(struct list_head *page_list,
-		struct pglist_data *pgdat,
-		struct scan_control *sc,
-		enum ttu_flags ttu_flags,
-		struct reclaim_stat *stat,
-		bool force_reclaim);
-extern unsigned long shrink_list(enum lru_list lru, unsigned long nr_to_scan,
-		struct lruvec *lruvec, struct scan_control *sc);
-extern unsigned long
-shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
-		struct scan_control *sc, enum lru_list lru);
-extern unsigned long shrink_slab(gfp_t gfp_mask, int nid,
-		struct mem_cgroup *memcg,
-		int priority);
-extern void shrink_node_memcg(struct pglist_data *pgdat, struct mem_cgroup *memcg,
-		struct scan_control *sc, unsigned long *lru_pages);
-extern inline bool should_continue_reclaim(struct pglist_data *pgdat,
-		unsigned long nr_reclaimed,
-		unsigned long nr_scanned,
-		struct scan_control *sc);
-extern int isolate_lru_page(struct page *page);
-extern void putback_lru_page(struct page *page);
-extern bool pgdat_reclaimable(struct pglist_data *pgdat);
-extern int isolate_lru_page(struct page *page);
-extern void putback_lru_page(struct page *page);
-extern bool pgdat_reclaimable(struct pglist_data *pgdat);
-extern bool global_reclaim(struct scan_control *sc);
-extern bool sane_reclaim(struct scan_control *sc);
-extern void set_memcg_congestion(pg_data_t *pgdat,
-				struct mem_cgroup *memcg,
-				bool congested);
-extern bool memcg_congested(pg_data_t *pgdat,
-			struct mem_cgroup *memcg);
-extern int current_may_throttle(void);
-extern bool pgdat_memcg_congested(pg_data_t *pgdat, struct mem_cgroup *memcg);
-#endif
-
 
 /*
  * in mm/rmap.c:
@@ -677,6 +521,7 @@ unsigned long reclaim_clean_pages_from_list(struct zone *zone,
 #define ALLOC_CPUSET		0x40 /* check for correct cpuset */
 #define ALLOC_CMA		0x80 /* allow allocations from CMA areas */
 
+enum ttu_flags;
 struct tlbflush_unmap_batch;
 
 

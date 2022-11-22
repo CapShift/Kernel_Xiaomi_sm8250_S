@@ -4704,11 +4704,6 @@ static inline bool prepare_alloc_pages(gfp_t gfp_mask, unsigned int order,
 
 	might_sleep_if(gfp_mask & __GFP_DIRECT_RECLAIM);
 
-#ifdef CONFIG_HYPERHOLD_ZSWAPD
-	if (gfp_mask & __GFP_KSWAPD_RECLAIM)
-		wake_all_zswapd();
-#endif
-
 	if (should_fail_alloc_page(gfp_mask, order))
 		return false;
 
@@ -5144,10 +5139,6 @@ long si_mem_available(void)
 	reclaimable = global_node_page_state(NR_SLAB_RECLAIMABLE) +
 			global_node_page_state(NR_KERNEL_MISC_RECLAIMABLE);
 	available += reclaimable - min(reclaimable / 2, wmark_low);
-
-#ifdef CONFIG_HYPERHOLD_CORE
-	available += (long)get_hyperhold_cache_pages();
-#endif
 
 	if (available < 0)
 		available = 0;
@@ -6644,10 +6635,6 @@ static void __meminit pgdat_init_internals(struct pglist_data *pgdat)
 
 	init_waitqueue_head(&pgdat->kswapd_wait);
 	init_waitqueue_head(&pgdat->pfmemalloc_wait);
-
-#ifdef CONFIG_HYPERHOLD_ZSWAPD
-	init_waitqueue_head(&pgdat->zswapd_wait);
-#endif
 
 	pgdat_page_ext_init(pgdat);
 	spin_lock_init(&pgdat->lru_lock);
