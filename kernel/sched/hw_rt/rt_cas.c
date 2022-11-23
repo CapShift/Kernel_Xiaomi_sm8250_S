@@ -12,7 +12,7 @@ extern unsigned long cpu_util(int cpu);
 
 extern unsigned int sysctl_sched_cstate_aware;
 
-unsigned int sysctl_sched_enable_rt_cas = 1;
+unsigned int sysctl_sched_enable_rt_cas = 0;
 
 #define RT_CAPACITY_MARGIN 1280 /* ~20% */
 

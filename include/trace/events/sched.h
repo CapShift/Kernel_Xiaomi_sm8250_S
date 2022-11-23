@@ -1792,6 +1792,62 @@ TRACE_EVENT(walt_active_load_balance,
 			__entry->pid, __entry->misfit, __entry->prev_cpu,
 			__entry->new_cpu)
 );
+
+TRACE_EVENT(walt_find_busiest_queue,
+
+	TP_PROTO(int dst_cpu, int busiest_cpu, unsigned long src_mask),
+
+	TP_ARGS(dst_cpu, busiest_cpu, src_mask),
+
+	TP_STRUCT__entry(
+		__field(int, dst_cpu)
+		__field(int, busiest_cpu)
+		__field(unsigned long, src_mask)
+	),
+
+	TP_fast_assign(
+		__entry->dst_cpu	= dst_cpu;
+		__entry->busiest_cpu	= busiest_cpu;
+		__entry->src_mask	= src_mask;
+	),
+
+	TP_printk("dst_cpu=%d busiest_cpu=%d src_mask=%lx\n",
+			__entry->dst_cpu, __entry->busiest_cpu,
+			__entry->src_mask)
+);
+
+TRACE_EVENT(walt_lb_cpu_util,
+
+	TP_PROTO(int cpu, struct rq *rq),
+
+	TP_ARGS(cpu, rq),
+
+	TP_STRUCT__entry(
+		__field(int, cpu)
+		__field(unsigned int, nr_running)
+		__field(unsigned int, cfs_nr_running)
+		__field(unsigned int, nr_big)
+		__field(unsigned int, nr_rtg_high_prio_tasks)
+		__field(unsigned int, cpu_util)
+		__field(unsigned int, capacity_orig)
+	),
+
+	TP_fast_assign(
+		__entry->cpu			= cpu;
+		__entry->nr_running		= cpu_rq(cpu)->nr_running;
+		__entry->cfs_nr_running		= cpu_rq(cpu)->cfs.h_nr_running;
+		__entry->nr_big			= rq->walt_stats.nr_big_tasks;
+		__entry->nr_rtg_high_prio_tasks	= walt_nr_rtg_high_prio(cpu);
+		__entry->cpu_util		= cpu_util(cpu);
+		__entry->capacity_orig		= capacity_orig_of(cpu);
+	),
+
+	TP_printk("cpu=%d nr_running=%u cfs_nr_running=%u nr_big=%u nr_rtg_hp=%u cpu_util=%u capacity_orig=%u",
+		__entry->cpu, __entry->nr_running, __entry->cfs_nr_running,
+		__entry->nr_big, __entry->nr_rtg_high_prio_tasks,
+		__entry->cpu_util, __entry->capacity_orig)
+);
+
 #endif
 
 #include "walt.h"

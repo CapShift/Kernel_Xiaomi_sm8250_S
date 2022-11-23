@@ -4185,3 +4185,225 @@ void android_scheduler_tick(struct rq *rq)
 	walt_lb_tick(rq);
 }
 
+static inline unsigned long walt_lb_cpu_util(int cpu)
+{
+	struct rq *rq = cpu_rq(cpu);
+
+	return rq->walt_stats.cumulative_runnable_avg_scaled;
+}
+
+#define ASYMCAP_BOOST(cpu)	(sysctl_sched_asymcap_boost && !is_min_capacity_cpu(cpu))
+#define SMALL_TASK_THRESHOLD	102
+static int walt_lb_find_busiest_similar_cap_cpu(int dst_cpu, const cpumask_t *src_mask,
+		int *has_misfit)
+{
+	int i;
+	int busiest_cpu = -1;
+	unsigned long util, busiest_util = 0;
+	struct rq *rq;
+
+	for_each_cpu(i, src_mask) {
+		rq = cpu_rq(i);
+		trace_walt_lb_cpu_util(i, rq);
+
+		if (cpu_rq(i)->nr_running < 2 || !cpu_rq(i)->cfs.h_nr_running)
+			continue;
+
+		util = walt_lb_cpu_util(i);
+		if (util < busiest_util)
+			continue;
+
+		busiest_util = util;
+		busiest_cpu = i;
+	}
+
+	return busiest_cpu;
+}
+
+static int walt_lb_find_busiest_from_higher_cap_cpu(int dst_cpu, const cpumask_t *src_mask,
+		int *has_misfit)
+{
+	int i;
+	int busiest_cpu = -1;
+	unsigned long util, busiest_util = 0;
+	unsigned long total_capacity = 0, total_util = 0, total_nr = 0;
+	int total_cpus = 0;
+	struct rq *rq;
+	bool asymcap_boost = ASYMCAP_BOOST(dst_cpu);
+	for_each_cpu(i, src_mask) {
+
+		if (!cpu_active(i))
+			continue;
+
+		rq = cpu_rq(i);
+		trace_walt_lb_cpu_util(i, rq);
+
+		util = walt_lb_cpu_util(i);
+		total_cpus += 1;
+		total_util += util;
+		total_capacity += capacity_orig_of(i);
+		total_nr += cpu_rq(i)->cfs.h_nr_running;
+
+		if (cpu_rq(i)->cfs.h_nr_running < 2)
+			continue;
+
+		if (cpu_rq(i)->cfs.h_nr_running == 2 &&
+			task_util(cpu_rq(i)->curr) < SMALL_TASK_THRESHOLD)
+			continue;
+
+		/*
+		 * During rotation, two silver fmax tasks gets
+		 * placed on gold/prime and the CPU may not be
+		 * overutilized but for rotation, we have to
+		 * spread out.
+		 */
+		if (!walt_rotation_enabled && !cpu_overutilized(i) &&
+			!asymcap_boost)
+			continue;
+
+		if (util < busiest_util)
+			continue;
+
+		busiest_util = util;
+		busiest_cpu = i;
+	}
+
+	/*
+	 * Don't allow migrating to lower cluster unless this high
+	 * capacity cluster is sufficiently loaded.
+	 */
+	if (!walt_rotation_enabled && !asymcap_boost) {
+		if (total_nr <= total_cpus || total_util * 1280 < total_capacity * 1024)
+			busiest_cpu = -1;
+	}
+
+	return busiest_cpu;
+}
+
+static int walt_lb_find_busiest_from_lower_cap_cpu(int dst_cpu, const cpumask_t *src_mask,
+		int *has_misfit)
+{
+	int i;
+	int busiest_cpu = -1;
+	unsigned long util, busiest_util = 0;
+	unsigned long total_capacity = 0, total_util = 0, total_nr = 0;
+	int total_cpus = 0;
+	int busy_nr_big_tasks = 0;
+	struct rq *rq;
+
+	/*
+	 * A higher capacity CPU is looking at a lower capacity
+	 * cluster. active balance and big tasks are in play.
+	 * other than that, it is very much same as above. we
+	 * really don't need this as a separate block. will
+	 * refactor this after final testing is done.
+	 */
+	for_each_cpu(i, src_mask) {
+		rq = cpu_rq(i);
+
+		if (!cpu_active(i))
+			continue;
+
+		trace_walt_lb_cpu_util(i, rq);
+
+		util = walt_lb_cpu_util(i);
+		total_cpus += 1;
+		total_util += util;
+		total_capacity += capacity_orig_of(i);
+		total_nr += cpu_rq(i)->cfs.h_nr_running;
+
+		/*
+		 * no point in selecting this CPU as busy, as
+		 * active balance is in progress.
+		 */
+		if (cpu_rq(i)->active_balance)
+			continue;
+
+		/* active migration is allowed only to idle cpu */
+		if (cpu_rq(i)->cfs.h_nr_running < 2 &&
+			(!rq->walt_stats.nr_big_tasks || !available_idle_cpu(dst_cpu)))
+			continue;
+
+		if (!walt_rotation_enabled && !cpu_overutilized(i) &&
+			!ASYMCAP_BOOST(i))
+			continue;
+
+		if (util < busiest_util)
+			continue;
+
+		busiest_util = util;
+		busiest_cpu = i;
+		busy_nr_big_tasks = rq->walt_stats.nr_big_tasks;
+	}
+
+	if (!walt_rotation_enabled && !busy_nr_big_tasks &&
+		!(busiest_cpu != -1 && ASYMCAP_BOOST(busiest_cpu))) {
+		if (total_nr <= total_cpus || total_util * 1280 < total_capacity * 1024)
+			busiest_cpu = -1;
+	}
+
+	if (busy_nr_big_tasks && busiest_cpu != -1)
+		*has_misfit = true;
+
+	return busiest_cpu;
+}
+
+static int walt_lb_find_busiest_cpu(int dst_cpu, const cpumask_t *src_mask, int *has_misfit)
+{
+	int fsrc_cpu = cpumask_first(src_mask);
+	int busiest_cpu;
+
+	if (capacity_orig_of(dst_cpu) == capacity_orig_of(fsrc_cpu))
+		busiest_cpu = walt_lb_find_busiest_similar_cap_cpu(dst_cpu,
+								src_mask, has_misfit);
+	else if (capacity_orig_of(dst_cpu) > capacity_orig_of(fsrc_cpu))
+		busiest_cpu = walt_lb_find_busiest_from_lower_cap_cpu(dst_cpu,
+								      src_mask, has_misfit);
+	else
+		busiest_cpu = walt_lb_find_busiest_from_higher_cap_cpu(dst_cpu,
+								       src_mask, has_misfit);
+
+	return busiest_cpu;
+}
+
+void walt_find_busiest_queue(int dst_cpu,
+				    struct sched_group *group,
+				    struct cpumask *env_cpus,
+				    struct rq **busiest, int *done)
+{
+	int fsrc_cpu = group_first_cpu(group);
+	int busiest_cpu = -1;
+	struct cpumask src_mask;
+	int has_misfit;
+
+	*done = 1;
+	*busiest = NULL;
+
+	/*
+	 * same cluster means, there will only be 1
+	 * CPU in the busy group, so just select it.
+	 */
+	if (same_cluster(dst_cpu, fsrc_cpu)) {
+		busiest_cpu = fsrc_cpu;
+		goto done;
+	}
+
+	/*
+	 * We will allow inter cluster migrations
+	 * only if the source group is sufficiently
+	 * loaded. The upstream load balancer is a
+	 * bit more generous.
+	 *
+	 * re-using the same code that we use it
+	 * for newly idle load balance. The policies
+	 * remain same.
+	 */
+	cpumask_and(&src_mask, sched_group_span(group), env_cpus);
+	busiest_cpu = walt_lb_find_busiest_cpu(dst_cpu, &src_mask, &has_misfit);
+done:
+	if (busiest_cpu != -1)
+		*busiest = cpu_rq(busiest_cpu);
+
+	trace_walt_find_busiest_queue(dst_cpu, busiest_cpu, src_mask.bits[0]);
+}
+

@@ -583,4 +583,8 @@ static inline bool walt_fair_task(struct task_struct *p)
 
 extern void walt_lb_tick(struct rq *rq);
 extern void android_scheduler_tick(struct rq *rq);
+extern void walt_find_busiest_queue(int dst_cpu,
+				    struct sched_group *group,
+				    struct cpumask *env_cpus,
+				    struct rq **busiest, int *done);
 #endif
