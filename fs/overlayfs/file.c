@@ -651,15 +651,3 @@ const struct file_operations ovl_file_operations = {
 	.clone_file_range	= ovl_clone_file_range,
 	.dedupe_file_range	= ovl_dedupe_file_range,
 };
-
-#if defined(CONFIG_OVERLAY_FS) && defined(CONFIG_HW_CGROUP_WORKINGSET)
-struct file *get_real_file(struct file *filp)
-{
-	struct inode *inode = file_inode(filp);
-
-	if (inode && inode->i_fop == &ovl_file_operations)
-		return get_real_file(filp->private_data);
-	else
-		return filp;
-}
-#endif

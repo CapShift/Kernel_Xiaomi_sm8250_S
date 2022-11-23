@@ -292,21 +292,3 @@ obj-$(CONFIG_GENERIC_LIB_LSHRDI3) += lshrdi3.o
 obj-$(CONFIG_GENERIC_LIB_MULDI3) += muldi3.o
 obj-$(CONFIG_GENERIC_LIB_CMPDI2) += cmpdi2.o
 obj-$(CONFIG_GENERIC_LIB_UCMPDI2) += ucmpdi2.o
-
-obj-y += libc_sec/securec_v2/src/vsprintf_s.o \
-			      libc_sec/securec_v2/src/snprintf_s.o \
-			      libc_sec/securec_v2/src/memmove_s.o \
-			      libc_sec/securec_v2/src/strcat_s.o \
-			      libc_sec/securec_v2/src/strncpy_s.o \
-			      libc_sec/securec_v2/src/sprintf_s.o \
-			      libc_sec/securec_v2/src/memset_s.o \
-			      libc_sec/securec_v2/src/securecutil.o \
-			      libc_sec/securec_v2/src/strtok_s.o \
-			      libc_sec/securec_v2/src/memcpy_s.o \
-			      libc_sec/securec_v2/src/strncat_s.o \
-			      libc_sec/securec_v2/src/vsnprintf_s.o \
-			      libc_sec/securec_v2/src/strcpy_s.o \
-			      libc_sec/securec_v2/src/secureprintoutput_a.o \
-			      libc_sec/securec_v2/src/sscanf_s.o \
-			      libc_sec/securec_v2/src/vsscanf_s.o \
-			      libc_sec/securec_v2/src/secureinput_a.o

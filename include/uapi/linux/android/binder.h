@@ -528,6 +528,4 @@ enum binder_driver_command_protocol {
 	 * binder_transaction_data_sg: the sent command.
 	 */
 };
-
-int workingset_wakeup_preread_binder(int pid);
 #endif /* _UAPI_LINUX_BINDER_H */

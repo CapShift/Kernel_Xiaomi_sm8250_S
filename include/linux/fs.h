@@ -3636,10 +3636,6 @@ static inline void simple_fill_fsxattr(struct fsxattr *fa, __u32 xflags)
 	fa->fsx_xflags = xflags;
 }
 
-#if defined(CONFIG_OVERLAY_FS) && defined(CONFIG_HW_CGROUP_WORKINGSET)
-struct file *get_real_file(struct file *filp);
-#endif
-
 /*
  * Flush file data before changing attributes.  Caller must hold any locks
  * required to prevent further writes to this file until we're done setting
