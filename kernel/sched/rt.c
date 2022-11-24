@@ -1546,6 +1546,8 @@ select_task_rq_rt(struct task_struct *p, int cpu, int sd_flag, int flags,
 	int target = -1;
 	bool may_not_preempt;
 
+	may_not_preempt = task_may_not_preempt(curr, cpu);
+
 	/*
 	 * If cpu is non-preemptible, prefer remote cpu
 	 * even if it's running a higher-prio task.
@@ -1598,7 +1600,6 @@ select_task_rq_rt(struct task_struct *p, int cpu, int sd_flag, int flags,
 	 * This test is optimistic, if we get it wrong the load-balancer
 	 * will have to sort it out.
 	 */
-	may_not_preempt = task_may_not_preempt(curr, cpu);
 	if (static_branch_unlikely(&sched_energy_present) || may_not_preempt ||
 	    (unlikely(rt_task(curr)) &&
 	     (curr->nr_cpus_allowed < 2 ||
