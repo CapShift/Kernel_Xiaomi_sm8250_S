@@ -96,6 +96,13 @@ static void find_cache_siblings(void)
 	}
 }
 
+static void walt_cpu_array(void)
+{
+	init_cpu_array();
+	build_cpu_array();
+}
+core_initcall(walt_cpu_array);
+
 static void walt_update_cluster_topology(void)
 {
 	init_cpu_array();
