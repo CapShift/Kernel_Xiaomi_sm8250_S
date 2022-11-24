@@ -3577,7 +3577,7 @@ void walt_fill_ta_data(struct core_ctl_notif_data *data)
 	 * P = total_demand/sched_ravg_window * 1024/scale * 100
 	 */
 
-	min_cap_cpu = this_rq()->rd->min_cap_orig_cpu;
+	min_cap_cpu = cpumask_first(&cpu_array[0][0]);
 	if (min_cap_cpu != -1)
 		scale = arch_scale_cpu_capacity(NULL, min_cap_cpu);
 
