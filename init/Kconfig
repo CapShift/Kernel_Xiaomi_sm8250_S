@@ -2264,5 +2264,3 @@ config ARCH_HAS_SYSCALL_WRAPPER
 	def_bool n
 
 source "init/Kconfig.gki"
-
-source "kernel/sched/hw_rt/Kconfig"

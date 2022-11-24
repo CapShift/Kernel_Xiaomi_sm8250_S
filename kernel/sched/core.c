@@ -4066,11 +4066,6 @@ void scheduler_tick(void)
 
 	android_scheduler_tick(rq);
 
-#ifdef CONFIG_HW_RT_ACTIVE_LB
-	if (curr->sched_class == &rt_sched_class)
-		check_for_rt_migration(rq, curr);
-#endif
-
 #ifdef CONFIG_SMP
 	walt_lb_tick(rq);
 #endif

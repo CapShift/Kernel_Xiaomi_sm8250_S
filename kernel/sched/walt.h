@@ -60,8 +60,6 @@ extern __read_mostly unsigned int sched_freq_aggregate;
 extern __read_mostly unsigned int sched_group_upmigrate;
 extern __read_mostly unsigned int sched_group_downmigrate;
 
-extern unsigned long uclamp_task_util(struct task_struct *p);
-
 extern void update_task_ravg(struct task_struct *p, struct rq *rq, int event,
 						u64 wallclock, u64 irqtime);
 
