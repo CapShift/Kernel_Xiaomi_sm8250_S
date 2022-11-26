@@ -1108,6 +1108,12 @@ config SF_BINDER
 	help
 	  Xiaomi restore surfaceflinger binder prio FIFO
 
+config BINDER_OPT
+	bool "critical task opt of binder"
+	default y
+	---help---
+	  Mark important binder calls from ui thread.
+
 config MI_FOD_DIMLAYER
 	default y
 	bool "mi fod dimlayer impl enable" if EXPERT
