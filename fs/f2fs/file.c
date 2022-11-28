@@ -278,8 +278,7 @@ static int f2fs_do_sync_file(struct file *file, loff_t start, loff_t end,
 	bool turbo_set = false;
 #endif
 
-	if (unlikely(f2fs_readonly(inode->i_sb) ||
-				is_sbi_flag_set(sbi, SBI_CP_DISABLED)))
+	if (unlikely(f2fs_readonly(inode->i_sb)))
 		return 0;
 
 	trace_f2fs_sync_file_enter(inode);
