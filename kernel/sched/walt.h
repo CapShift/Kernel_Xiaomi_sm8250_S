@@ -309,6 +309,17 @@ static inline void walt_update_last_enqueue(struct task_struct *p)
 {
 	p->last_enqueued_ts = sched_ktime_clock();
 }
+
+static inline unsigned int walt_get_idle_exit_latency(struct rq *rq)
+{
+	struct cpuidle_state *idle = idle_get_state(rq);
+
+	if (idle)
+		return idle->exit_latency;
+
+	return 0; /* CPU is not idle */
+}
+
 extern void walt_lb_rotate_work_init(void);
 extern void walt_rotation_checkpoint(int nr_big);
 extern unsigned int walt_rotation_enabled;
