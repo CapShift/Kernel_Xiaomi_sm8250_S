@@ -7613,6 +7613,10 @@ static void select_cpu_candidates(struct sched_domain *sd, cpumask_t *cpus,
 			cpu_cap = capacity_of(cpu);
 			spare_cap = cpu_cap - util;
 
+                        /* Skip CPUs which do not fit task requirements */
+			if (cpu_cap < uclamp_task_util(p))
+				continue;
+
 			/*
 			 * Skip CPUs that cannot satisfy the capacity request.
 			 * IOW, placing the task there would make the CPU
