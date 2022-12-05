@@ -581,6 +581,18 @@ static inline bool walt_fair_task(struct task_struct *p)
 	return p->prio >= MAX_RT_PRIO && !is_idle_task(p);
 }
 
+static inline unsigned int walt_get_idle_exit_latency(struct rq *rq)
+{
+	struct cpuidle_state *idle = idle_get_state(rq);
+
+	if (idle)
+		return idle->exit_latency;
+
+	return 0; /* CPU is not idle */
+}
+
+extern int num_sched_clusters;
+extern cpumask_t __read_mostly **cpu_array;
 extern void walt_lb_tick(struct rq *rq);
 extern void android_scheduler_tick(struct rq *rq);
 #endif
