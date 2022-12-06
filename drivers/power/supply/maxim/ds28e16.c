@@ -1060,10 +1060,6 @@ static int verify_get_property(struct power_supply *psy, enum power_supply_prope
 		} else {
 			val->intval = false;
 		}
-		if ((mi_romid[0] == 0x9f) && (mi_romid[6] == 0x04) && ((mi_romid[5] & 0xf0) == 0xf0))
-			val->intval = true;
-		else
-			val->intval = false;
 		break;
 	case POWER_SUPPLY_PROP_DS_STATUS:
 		ret = DS28E16_cmd_readStatus(buf);
