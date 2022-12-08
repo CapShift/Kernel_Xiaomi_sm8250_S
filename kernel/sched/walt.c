@@ -3695,26 +3695,18 @@ static void build_cpu_array(void)
 	}
 }
 
-static void walt_update_cluster_topology(void)
+void walt_update_cluster_topology(void)
 {
 	init_cpu_array();
 	build_cpu_array();
 }
-
-static int walt_init_stop_handler(void *data)
-{
-	walt_update_cluster_topology();
-
-	return 0;
-}
+early_initcall(walt_update_cluster_topology);
 
 static void walt_init_once(void)
 {
 	init_irq_work(&walt_migration_irq_work, walt_irq_work);
 	init_irq_work(&walt_cpufreq_irq_work, walt_irq_work);
 	walt_lb_rotate_work_init();
-
-	stop_machine(walt_init_stop_handler, NULL, NULL);
 
 	walt_init_window_dep();
 }
