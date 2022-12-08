@@ -1854,7 +1854,7 @@ static struct task_struct *pick_highest_pushable_task(struct rq *rq, int cpu)
 
 static DEFINE_PER_CPU(cpumask_var_t, local_cpu_mask);
 
-static int rt_energy_aware_wake_cpu(struct task_struct *task)
+static int rt_energy_aware_wake_cpu(struct task_struct *task, int ret)
 {
 	struct sched_domain *sd;
 	struct sched_group *sg;
@@ -1868,6 +1868,10 @@ static int rt_energy_aware_wake_cpu(struct task_struct *task)
 	int best_cpu_idle_idx = INT_MAX;
 	int cpu_idle_idx = -1;
 	bool boost_on_big = rt_boost_on_big();
+	bool best_cpu_lt = true;
+
+	if (!ret)
+		return -1; /* No targets found */
 
 	rcu_read_lock();
 
@@ -1894,6 +1898,7 @@ retry:
 		}
 
 		for_each_cpu_and(cpu, lowest_mask, sched_group_span(sg)) {
+			bool lt;
 
 			trace_sched_cpu_util(cpu);
 
@@ -1908,8 +1913,21 @@ retry:
 
 			util = cpu_util(cpu);
 
-			/* Find the least loaded CPU */
-			if (util > best_cpu_util)
+                        lt = (walt_low_latency_task(cpu_rq(cpu)->curr) ||
+				walt_nr_rtg_high_prio(cpu));
+
+			/*
+			 * When the best is suitable and the current is not,
+			 * skip it
+			 */
+			if (lt && !best_cpu_lt)
+				continue;
+
+			/*
+			 * Either both are sutilable or unsuitable, load takes
+			 * precedence.
+			 */
+			if (!(best_cpu_lt ^ lt) && (util > best_cpu_util))
 				continue;
 
 			/*
@@ -1944,6 +1962,7 @@ retry:
 			best_cpu_util = util;
 			best_cpu = cpu;
 			best_capacity = capacity_orig;
+			best_cpu_lt = lt;
 		}
 
 	} while (sg = sg->next, sg != sd->groups);
@@ -1964,6 +1983,7 @@ static int find_lowest_rq(struct task_struct *task)
 	struct cpumask *lowest_mask = this_cpu_cpumask_var_ptr(local_cpu_mask);
 	int this_cpu = smp_processor_id();
 	int cpu = -1;
+	int ret;
 
 	/* Make sure the mask is initialized first */
 	if (unlikely(!lowest_mask))
@@ -1972,11 +1992,23 @@ static int find_lowest_rq(struct task_struct *task)
 	if (task->nr_cpus_allowed == 1)
 		return -1; /* No other targets possible */
 
-	if (!cpupri_find(&task_rq(task)->rd->cpupri, task, lowest_mask))
-		return -1; /* No targets found */
+	/*
+	 * If we're on asym system ensure we consider the different capacities
+	 * of the CPUs when searching for the lowest_mask.
+	 */
+	if (static_branch_unlikely(&sched_asym_cpucapacity)) {
+
+		ret = cpupri_find_fitness(&task_rq(task)->rd->cpupri,
+					  task, lowest_mask,
+					  rt_task_fits_capacity);
+	} else {
+
+		ret = cpupri_find(&task_rq(task)->rd->cpupri,
+				  task, lowest_mask);
+	}
 
 	if (static_branch_unlikely(&sched_energy_present))
-		cpu = rt_energy_aware_wake_cpu(task);
+		cpu = rt_energy_aware_wake_cpu(task, ret);
 
 	if (cpu == -1)
 		cpu = task_cpu(task);
