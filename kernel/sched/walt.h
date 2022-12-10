@@ -595,4 +595,5 @@ extern int num_sched_clusters;
 extern cpumask_t __read_mostly **cpu_array;
 extern void walt_lb_tick(struct rq *rq);
 extern void android_scheduler_tick(struct rq *rq);
+extern void walt_init(void);
 #endif

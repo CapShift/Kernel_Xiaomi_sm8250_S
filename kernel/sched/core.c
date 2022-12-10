@@ -3220,7 +3220,6 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 {
 	unsigned long flags;
 
-	init_new_task_load(p);
 	__sched_fork(clone_flags, p);
 	/*
 	 * We mark the process as NEW here. This guarantees that
@@ -3332,6 +3331,7 @@ void wake_up_new_task(struct task_struct *p)
 	struct rq_flags rf;
 	struct rq *rq;
 
+	init_new_task_load(p);
 	add_new_task_to_grp(p);
 	raw_spin_lock_irqsave(&p->pi_lock, rf.flags);
 
@@ -7389,6 +7389,8 @@ void __init sched_init(void)
 
 	wait_bit_init();
 
+	BUG_ON(alloc_related_thread_groups());
+
 	init_clusters();
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
@@ -7507,7 +7509,7 @@ void __init sched_init(void)
 		rq->avg_idle = 2*sysctl_sched_migration_cost;
 		rq->max_idle_balance_cost = sysctl_sched_migration_cost;
 		rq->push_task = NULL;
-		walt_sched_init_rq(rq);
+                walt_sched_init_rq(rq);
 
 		INIT_LIST_HEAD(&rq->cfs_tasks);
 
@@ -7522,8 +7524,8 @@ void __init sched_init(void)
 		atomic_set(&rq->nr_iowait, 0);
 	}
 
-	BUG_ON(alloc_related_thread_groups());
-
+        walt_init();
+        
 	set_load_weight(&init_task, false);
 
 	/*
@@ -7539,7 +7541,6 @@ void __init sched_init(void)
 	 * when this runqueue becomes "idle".
 	 */
 	init_idle(current, smp_processor_id());
-	init_new_task_load(current);
 
 	calc_load_update = jiffies + LOAD_FREQ;
 
