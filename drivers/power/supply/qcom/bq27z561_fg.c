@@ -75,14 +75,11 @@ module_param_named(
 #define PD_CHG_UPDATE_DELAY_US	20	/*20 sec*/
 #define BQ_I2C_FAILED_SOC	15
 #define BQ_I2C_FAILED_TEMP	250
-#define BQ_I2C_FAILED_TEMP_HIGH	500
 #define BMS_FG_VERIFY		"BMS_FG_VERIFY"
-#define BMS_VERIFY_VOTER	"BATT_VERIFY_VOTER"
 
 #define BQ_PACK_MAXIUM_VOLTAGE_FOR_PMIC			4490
 #define BQ_MAXIUM_VOLTAGE_FOR_CELL			4480
-#define VOLTAGE_FOR_CELL_HYS				1
-#define BQ_PACK_MAXIUM_VOLTAGE_FOR_PMIC_SAFETY		4477
+#define BQ_PACK_MAXIUM_VOLTAGE_FOR_PMIC_SAFETY	4477
 enum bq_fg_reg_idx {
 	BQ_FG_REG_CTRL = 0,
 	BQ_FG_REG_TEMP,		/* Battery Temperature */
@@ -222,9 +219,6 @@ struct bq_fg_chip {
 	int batt_st;
 	int raw_soc;
 	int last_soc;
-	int last_rsoc;
-	int last_rm;
-	int last_fcc;
 
 	/* debug */
 	int skip_reads;
@@ -899,13 +893,11 @@ static int fg_read_rsoc(struct bq_fg_chip *bq)
 	ret = regmap_read(bq->regmap, bq->regs[BQ_FG_REG_SOC], &soc);
 	if (ret < 0) {
 		bq_dbg(PR_OEM, "could not read RSOC, ret = %d\n", ret);
-		if (bq->last_rsoc >= 0)
-			return bq->last_rsoc;
+		if (bq->last_soc >= 0)
+			return bq->last_soc;
 		else
 			soc = BQ_I2C_FAILED_SOC;
 	}
-
-	bq->last_rsoc = soc;
 
 	return soc;
 }
@@ -938,7 +930,6 @@ static int fg_read_temperature(struct bq_fg_chip *bq)
 	int ret;
 	u16 temp = 0;
 	static int last_temp[FG_MAX_INDEX];
-	static int i2c_error_cnt[FG_MAX_INDEX];
 
 	if (bq->fake_temp > 0)
 		return bq->fake_temp;
@@ -949,13 +940,8 @@ static int fg_read_temperature(struct bq_fg_chip *bq)
 	ret = fg_read_word(bq, bq->regs[BQ_FG_REG_TEMP], &temp);
 	if (ret < 0) {
 		bq_dbg(PR_OEM, "could not read temperature, ret = %d\n", ret);
-		if (i2c_error_cnt[bq->fg_index]++ >= 3) {
-			i2c_error_cnt[bq->fg_index] = 3;
-			return BQ_I2C_FAILED_TEMP_HIGH;
-		}
 		return BQ_I2C_FAILED_TEMP;
 	}
-	i2c_error_cnt[bq->fg_index] = 0;
 	last_temp[bq->fg_index] = temp - 2730;
 
 	return temp - 2730;
@@ -1017,13 +1003,9 @@ static int fg_read_fcc(struct bq_fg_chip *bq)
 	}
 
 	ret = fg_read_word(bq, bq->regs[BQ_FG_REG_FCC], &fcc);
-	if (ret < 0) {
-		bq_dbg(PR_OEM, "could not read FCC, ret=%d\n", ret);
-		fcc = bq->last_fcc;
-		return fcc;
-	}
 
-	bq->last_fcc = fcc;
+	if (ret < 0)
+		bq_dbg(PR_OEM, "could not read FCC, ret=%d\n", ret);
 
 	return fcc;
 }
@@ -1042,11 +1024,8 @@ static int fg_read_rm(struct bq_fg_chip *bq)
 
 	if (ret < 0) {
 		bq_dbg(PR_OEM, "could not read DC, ret=%d\n", ret);
-		rm = bq->last_rm;
-		return rm;
+		return ret;
 	}
-
-	bq->last_rm = rm;
 
 	return rm;
 }
@@ -1206,13 +1185,9 @@ static int fg_get_batt_capacity_level(struct bq_fg_chip *bq)
 		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
 	else if (bq->batt_rca)
 		return POWER_SUPPLY_CAPACITY_LEVEL_LOW;
-	else if (bq->batt_fd) {
-#ifdef CONFIG_FACTORY_BUILD
-		return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
-#else
+	else if (bq->batt_fd)
 		return POWER_SUPPLY_CAPACITY_LEVEL_LOW;
-#endif
-	} else
+	else
 		return POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
 
 }
@@ -1557,15 +1532,10 @@ static int fg_get_property(struct power_supply *psy, enum power_supply_property 
 			break;
 		}
 		val->intval = fg_read_charging_voltage(bq);
-		bq_dbg(PR_DEBUG, "fg_read_gauge_voltage_max: %d\n", val->intval);
 		if (val->intval == BQ_MAXIUM_VOLTAGE_FOR_CELL) {
-#ifndef CONFIG_DUAL_FUEL_GAUGE_BQ27Z561
 			if (bq->batt_volt > BQ_PACK_MAXIUM_VOLTAGE_FOR_PMIC_SAFETY) {
-#else
-			if (bq->batt_volt > BQ_MAXIUM_VOLTAGE_FOR_CELL + VOLTAGE_FOR_CELL_HYS) {
-#endif
 				ov_count[bq->fg_index]++;
-				if (ov_count[bq->fg_index] > 4) {
+				if (ov_count[bq->fg_index] > 2) {
 					ov_count[bq->fg_index] = 0;
 					bq->cell_ov_check++;
 				}
@@ -1576,7 +1546,6 @@ static int fg_get_property(struct power_supply *psy, enum power_supply_property 
 				bq->cell_ov_check = 4;
 
 			val->intval = BQ_PACK_MAXIUM_VOLTAGE_FOR_PMIC - bq->cell_ov_check * 10;
-			bq_dbg(PR_DEBUG, "prop_voltage_max: %d\n", val->intval);
 #ifndef CONFIG_DUAL_FUEL_GAUGE_BQ27Z561
 			if ((bq->batt_soc == 100) && (val->intval == BQ_PACK_MAXIUM_VOLTAGE_FOR_PMIC))
 				val->intval = BQ_MAXIUM_VOLTAGE_FOR_CELL;
@@ -1668,8 +1637,6 @@ static int fg_set_property(struct power_supply *psy,
 		if (!bq->fcc_votable)
 			bq->fcc_votable = find_votable("FCC");
 		vote(bq->fcc_votable, BMS_FG_VERIFY, !bq->verify_digest_success,
-				!bq->verify_digest_success ? 2000000 : 0);
-		vote(bq->fcc_votable, BMS_VERIFY_VOTER, !bq->verify_digest_success,
 				!bq->verify_digest_success ? 2000000 : 0);
 #endif
 		break;
