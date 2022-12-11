@@ -62,6 +62,13 @@ static struct syscore_ops sched_syscore_ops = {
 	.suspend = sched_suspend
 };
 
+static int __init sched_init_ops(void)
+{
+	register_syscore_ops(&sched_syscore_ops);
+	return 0;
+}
+late_initcall(sched_init_ops);
+
 static void acquire_rq_locks_irqsave(const cpumask_t *cpus,
 				     unsigned long *flags)
 {
@@ -3062,7 +3069,7 @@ unsigned int sched_get_group_id(struct task_struct *p)
  * The job of synchronizing tasks to the colocation group is done when
  * the colocation flag in the cgroup is turned on.
  */
-static int create_default_coloc_group(void)
+static int __init create_default_coloc_group(void)
 {
 	struct related_thread_group *grp = NULL;
 	unsigned long flags;
@@ -3074,6 +3081,7 @@ static int create_default_coloc_group(void)
 
 	return 0;
 }
+late_initcall(create_default_coloc_group);
 
 int sync_cgroup_colocation(struct task_struct *p, bool insert)
 {
@@ -3687,10 +3695,18 @@ static void build_cpu_array(void)
 	}
 }
 
+void walt_update_cluster_topology(void)
+{
+	init_cpu_array();
+	build_cpu_array();
+}
+early_initcall(walt_update_cluster_topology);
+
 static void walt_init_once(void)
 {
 	init_irq_work(&walt_migration_irq_work, walt_irq_work);
 	init_irq_work(&walt_cpufreq_irq_work, walt_irq_work);
+	walt_lb_rotate_work_init();
 
 	walt_init_window_dep();
 }
@@ -4233,49 +4249,3 @@ void android_scheduler_tick(struct rq *rq)
 	walt_lb_tick(rq);
 }
 
-static void init_existing_task_load(struct task_struct *p)
-{
-	init_new_task_load(p);
-	cpumask_copy(&p->cpus_requested, &p->cpus_allowed);
-}
-
-static void walt_update_cluster_topology(void)
-{
-	init_cpu_array();
-	build_cpu_array();
-}
-
-static int walt_init_stop_handler(void *data)
-{
-	int cpu;
-	struct task_struct *g, *p;
-
-	read_lock(&tasklist_lock);
-	for_each_possible_cpu(cpu) {
-		raw_spin_lock(&cpu_rq(cpu)->lock);
-	}
-
-	do_each_thread(g, p) {
-		init_existing_task_load(p);
-	} while_each_thread(g, p);
-
-	create_default_coloc_group();
-
-	walt_update_cluster_topology();
-
-	for_each_possible_cpu(cpu) {
-		raw_spin_unlock(&cpu_rq(cpu)->lock);
-	}
-	read_unlock(&tasklist_lock);
-
-	return 0;
-}
-
-void walt_init(void)
-{
-        register_syscore_ops(&sched_syscore_ops);
-
-	walt_lb_rotate_work_init();
-
-	stop_machine(walt_init_stop_handler, NULL, NULL);
-}
