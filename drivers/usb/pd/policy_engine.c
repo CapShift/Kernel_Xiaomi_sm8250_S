@@ -813,6 +813,8 @@ static int pd_send_msg(struct usbpd *pd, u8 msg_type, const u32 *data,
 	}
 	spin_unlock_irqrestore(&pd->rx_lock, flags);
 
+	usbpd_dbg(&pd->dev, "send msg %s\n",
+			msg_to_string(msg_type, num_data, false));
 	ret = pd_phy_write(hdr, (u8 *)data, num_data * sizeof(u32), sop);
 	if (ret) {
 		if (pd->pd_connected)
@@ -5611,8 +5613,7 @@ static void usbpd_pdo_workfunc(struct work_struct *w)
 		pps_max_mwatt = pps_max_watts / 1000  / 1000;
 		if (pps_max_mwatt != pd->apdo_max) {
 			pd->apdo_max = pps_max_mwatt;
-			//val.intval = pps_max_mwatt;
-			val.intval = min(pps_max_mwatt, pd->power_max);
+			val.intval = pps_max_mwatt;
 			power_supply_set_property(pd->usb_psy,
 					POWER_SUPPLY_PROP_APDO_MAX, &val);
 			usbpd_err(&pd->dev, "pps_max_watts[%d]\n", pps_max_mwatt);
