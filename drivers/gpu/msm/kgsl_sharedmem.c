@@ -11,7 +11,7 @@
 #include <linux/shmem_fs.h>
 #include <linux/bitfield.h>
 
-#include "kgsl_reclaim.h"
+#include "kgsl_device.h"
 #include "kgsl_sharedmem.h"
 
 /*
@@ -281,12 +281,6 @@ static struct mem_entry_stats mem_stats[] = {
 #endif
 };
 
-static struct device_attribute dev_attr_max_reclaim_limit = {
-	.attr = { .name = "max_reclaim_limit", .mode = 0644 },
-	.show = kgsl_proc_max_reclaim_limit_show,
-	.store = kgsl_proc_max_reclaim_limit_store,
-};
-
 void
 kgsl_process_uninit_sysfs(struct kgsl_process_private *private)
 {
@@ -335,8 +329,6 @@ void kgsl_process_init_sysfs(struct kgsl_device *device,
 			WARN(1, "Couldn't create sysfs file '%s'\n",
 				debug_memstats[i].attr.attr.name);
 	}
-
-	kgsl_reclaim_proc_sysfs_init(private);
 }
 
 static ssize_t memstat_show(struct device *dev,
@@ -415,7 +407,6 @@ static const struct attribute *drv_attr_list[] = {
 	&dev_attr_mapped.attr,
 	&dev_attr_mapped_max.attr,
 	&dev_attr_full_cache_threshold.attr,
-	&dev_attr_max_reclaim_limit.attr,
 	NULL,
 };
 
