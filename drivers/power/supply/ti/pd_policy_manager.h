@@ -247,7 +247,6 @@ struct usbpd_pm {
 	spinlock_t psy_change_lock;
 
 	struct votable		*fcc_votable;
-	struct votable		*fv_votable;
 	struct power_supply *cp_psy;
 	struct power_supply *cp_sec_psy;
 	struct power_supply *sw_psy;
