@@ -347,7 +347,7 @@ config LN8282
 
 config BQ_FAKE_VERIFY
 	bool
-	default n
+	default y
 	help
 	 Remove battery verification
 endmenu
