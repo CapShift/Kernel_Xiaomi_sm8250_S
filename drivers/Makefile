@@ -194,4 +194,4 @@ obj-$(CONFIG_GNSS)		+= gnss/
 obj-$(CONFIG_SENSORS_SSC)	+= sensors/
 
 obj-y		+= mihw/
->>>>>>> 7a444f941896 (drivers: introduce new millet implementation)
+obj-y		+= voyager/
