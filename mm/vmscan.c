@@ -158,7 +158,7 @@ struct scan_control {
 /*
  * Number of active kswapd threads
  */
-#define DEF_KSWAPD_THREADS_PER_NODE 6
+#define DEF_KSWAPD_THREADS_PER_NODE 1
 int kswapd_threads = DEF_KSWAPD_THREADS_PER_NODE;
 int kswapd_threads_current = DEF_KSWAPD_THREADS_PER_NODE;
 
