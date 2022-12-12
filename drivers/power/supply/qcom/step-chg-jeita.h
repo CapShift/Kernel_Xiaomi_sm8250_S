@@ -3,6 +3,8 @@
  * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
  */
 
+#include <misc/voyager.h>
+
 #ifndef __STEP_CHG_H__
 #define __STEP_CHG_H__
 
