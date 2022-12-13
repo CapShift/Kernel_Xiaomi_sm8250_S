@@ -2259,7 +2259,7 @@ static void walt_cpus_capacity_changed(const cpumask_t *cpus)
 
 
 struct sched_cluster *sched_cluster[NR_CPUS];
-int num_sched_clusters;
+static int num_sched_clusters;
 
 struct list_head cluster_head;
 cpumask_t asym_cap_sibling_cpus = CPU_MASK_NONE;
@@ -3571,7 +3571,7 @@ void walt_fill_ta_data(struct core_ctl_notif_data *data)
 	 * P = total_demand/sched_ravg_window * 1024/scale * 100
 	 */
 
-	min_cap_cpu = cpumask_first(&cpu_array[0][0]);
+	min_cap_cpu = this_rq()->rd->min_cap_orig_cpu;
 	if (min_cap_cpu != -1)
 		scale = arch_scale_cpu_capacity(NULL, min_cap_cpu);
 
@@ -3642,80 +3642,11 @@ static void walt_init_window_dep(void)
 		scale_demand(sched_init_task_load_windows);
 }
 
-cpumask_t __read_mostly **cpu_array;
-static void init_cpu_array(void)
-{
-	int i;
-
-	cpu_array = kcalloc(num_sched_clusters, sizeof(cpumask_t *),
-			GFP_ATOMIC | __GFP_NOFAIL);
-	if (!cpu_array)
-		SCHED_BUG_ON(1);
-
-	for (i = 0; i < num_sched_clusters; i++) {
-		cpu_array[i] = kcalloc(num_sched_clusters, sizeof(cpumask_t),
-			GFP_ATOMIC | __GFP_NOFAIL);
-		if (!cpu_array[i])
-			SCHED_BUG_ON(1);
-	}
-}
-
-static void build_cpu_array(void)
-{
-	int i;
-
-	if (!cpu_array)
-		SCHED_BUG_ON(1);
-	/* Construct cpu_array row by row */
-	for (i = 0; i < num_sched_clusters; i++) {
-		int j, k = 1;
-
-		/* Fill out first column with appropriate cpu arrays */
-		cpumask_copy(&cpu_array[i][0], &sched_cluster[i]->cpus);
-		/*
-		 * k starts from column 1 because 0 is filled
-		 * Fill clusters for the rest of the row,
-		 * above i in ascending order
-		 */
-		for (j = i + 1; j < num_sched_clusters; j++) {
-			cpumask_copy(&cpu_array[i][k],
-					&sched_cluster[j]->cpus);
-			k++;
-		}
-
-		/*
-		 * k starts from where we left off above.
-		 * Fill clusters below i in descending order.
-		 */
-		for (j = i - 1; j >= 0; j--) {
-			cpumask_copy(&cpu_array[i][k],
-					&sched_cluster[j]->cpus);
-			k++;
-		}
-	}
-}
-
-static void walt_update_cluster_topology(void)
-{
-	init_cpu_array();
-	build_cpu_array();
-}
-
-static int walt_init_stop_handler(void *data)
-{
-	walt_update_cluster_topology();
-
-	return 0;
-}
-
 static void walt_init_once(void)
 {
 	init_irq_work(&walt_migration_irq_work, walt_irq_work);
 	init_irq_work(&walt_cpufreq_irq_work, walt_irq_work);
 	walt_lb_rotate_work_init();
-
-	stop_machine(walt_init_stop_handler, NULL, NULL);
-
 	walt_init_window_dep();
 }
 
@@ -3953,29 +3884,20 @@ unlock_mutex:
 }
 #endif
 
-void walt_detach_task(struct task_struct *p, struct rq *src_rq,
+static void walt_detach_task(struct task_struct *p, struct rq *src_rq,
 			     struct rq *dst_rq)
 {
-	lockdep_assert_held(&src_rq->lock);
-
-	p->on_rq = TASK_ON_RQ_MIGRATING;
 	deactivate_task(src_rq, p, 0);
-	lockdep_off();
 	double_lock_balance(src_rq, dst_rq);
 	if (!(src_rq->clock_update_flags & RQCF_UPDATED))
 		update_rq_clock(src_rq);
 	set_task_cpu(p, dst_rq->cpu);
 	double_unlock_balance(src_rq, dst_rq);
-	lockdep_on();
 }
 
-void walt_attach_task(struct task_struct *p, struct rq *rq)
+static void walt_attach_task(struct task_struct *p, struct rq *rq)
 {
-	lockdep_assert_held(&rq->lock);
-
-	BUG_ON(task_rq(p) != rq);
 	activate_task(rq, p, 0);
-	p->on_rq = TASK_ON_RQ_QUEUED;
 	check_preempt_curr(rq, p, 0);
 }
 
