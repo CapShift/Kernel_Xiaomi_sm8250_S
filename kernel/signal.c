@@ -3383,12 +3383,12 @@ SYSCALL_DEFINE2(kill, pid_t, pid, int, sig)
 {
 	struct siginfo info;
         bool ignored = false;
-        
-	prepare_kill_siginfo(sig, &info);
 
-        sigkill_filter(&info, &ignored);
+        sigkill_filter(&info, pid, &ignored);
         if (ignored)
                 return -EPERM;
+
+	prepare_kill_siginfo(sig, &info);
 
 	return kill_something_info(sig, &info, pid);
 }

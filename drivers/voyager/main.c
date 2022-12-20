@@ -32,25 +32,45 @@ static const char *target[] = {
         "lmkd",
 };
 
-inline void sigkill_filter(struct siginfo *info, bool *ignored)
+static inline bool is_match(struct task_struct *tsk)
 {
-        struct task_struct *tsk;
-        int sig = info->si_signo;
-        int *pid = &info->si_pid;
 	int i;
+
+	for (i = 0; i < ARRAY_SIZE(target); i++) {
+		if (!strcmp(target[i], tsk->comm))
+			return true;
+	}
+
+	return false;
+}
+
+inline void sigkill_filter(struct siginfo *info, pid_t pid, bool *ignored)
+{
+	struct task_struct *pid_task;
+	struct pid *pid_struct;
+	int sig;
 
 	if (sig != SIGKILL && sig != SIGTERM)
 	        return;
         
-        tsk = pid_task((void *)pid, PIDTYPE_PID);
-        if (tsk == NULL)
-                return;
+	sig = info->si_signo;
+	if (pid < 0)
+		pid = -pid;
 
-        for (i = 0; i < ARRAY_SIZE(target); i++) {
-	        if (!strcmp(tsk->comm, target[i]))
-                        vk_err("Blocking \"%s\"(%d) send signal %d to "
-				"\"%s\"(%d)\n", NULL);
-	        	*ignored = true;
+	pid_struct = find_get_pid(pid);
+	if (IS_ERR(pid_struct)) {
+	        return;
+	}
+
+	pid_task = get_pid_task(pid_struct, PIDTYPE_PID);
+	if (IS_ERR(pid_task)) {
+	        return;
+	}
+
+        if (is_match(current)) {
+                vk_err("Blocking \"%s\"(%d) send signal %d to "
+			"\"%s\"(%d)\n", NULL);
+	        *ignored = true;
         }
 }
 
