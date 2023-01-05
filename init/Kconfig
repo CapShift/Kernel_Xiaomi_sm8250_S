@@ -586,6 +586,7 @@ config CPU_ISOLATION
 	  Say Y if unsure.
 
 source "kernel/rcu/Kconfig"
+source "kernel/sched/special_opt/Kconfig"
 
 config BUILD_BIN2C
 	bool

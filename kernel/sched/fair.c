@@ -24,6 +24,10 @@
 
 #include <trace/events/sched.h>
 
+#undef CREATE_TRACE_POINTS
+#define CREATE_TRACE_POINTS
+#include <trace/hooks/sched.h>
+
 #include "walt.h"
 
 #ifdef CONFIG_SMP
@@ -4379,6 +4383,8 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 	s64 delta;
 
 	ideal_runtime = sched_slice(cfs_rq, curr);
+	trace_android_rvh_check_preempt_tick(current, &ideal_runtime);
+
 	delta_exec = curr->sum_exec_runtime - curr->prev_sum_exec_runtime;
 	if (delta_exec > ideal_runtime) {
 		resched_curr(rq_of(cfs_rq));
@@ -7179,6 +7185,11 @@ static void walt_find_best_target(struct sched_domain *sd, cpumask_t *cpus,
 
 			trace_sched_cpu_util(i);
 
+			trace_android_rvh_find_best_target(p, i, &ignore);
+			if (ignore > 0) {
+				continue;
+			}
+
 			if (!cpu_active(i) || cpu_isolated(i))
 				continue;
 
@@ -8069,9 +8080,16 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 	struct cfs_rq *cfs_rq = task_cfs_rq(curr);
 	int scale = cfs_rq->nr_running >= sched_nr_latency;
 	int next_buddy_marked = 0;
+	int ignore = -1;
 
 	if (unlikely(se == pse))
 		return;
+
+	trace_android_rvh_check_preempt_wakeup(curr, &ignore);
+
+	if (ignore > 0) {
+		return;
+	}
 
 	/*
 	 * This is possible from callers such as attach_tasks(), in which we

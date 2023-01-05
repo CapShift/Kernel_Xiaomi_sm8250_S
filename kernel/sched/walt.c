@@ -3994,17 +3994,26 @@ unlock_mutex:
 static void walt_detach_task(struct task_struct *p, struct rq *src_rq,
 			     struct rq *dst_rq)
 {
+	lockdep_assert_held(&src_rq->lock);
+
+	p->on_rq = TASK_ON_RQ_MIGRATING;
 	deactivate_task(src_rq, p, 0);
+	lockdep_off();
 	double_lock_balance(src_rq, dst_rq);
 	if (!(src_rq->clock_update_flags & RQCF_UPDATED))
 		update_rq_clock(src_rq);
 	set_task_cpu(p, dst_rq->cpu);
 	double_unlock_balance(src_rq, dst_rq);
+	lockdep_on();
 }
 
 static void walt_attach_task(struct task_struct *p, struct rq *rq)
 {
+	lockdep_assert_held(&rq->lock);
+
+	BUG_ON(task_rq(p) != rq);
 	activate_task(rq, p, 0);
+	p->on_rq = TASK_ON_RQ_QUEUED;
 	check_preempt_curr(rq, p, 0);
 }
 
