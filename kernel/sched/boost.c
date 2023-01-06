@@ -30,6 +30,10 @@ void walt_init_sched_boost(struct task_group *tg)
 	tg->sched_boost_enabled = true;
 	tg->colocate = false;
 	tg->colocate_update_disabled = false;
+	tg->window_policy = 2;
+	tg->discount_wait_time = false;
+	tg->top_task_filter = false;
+	tg->ed_task_filter = false;
 }
 
 void update_cgroup_boost_settings(void)

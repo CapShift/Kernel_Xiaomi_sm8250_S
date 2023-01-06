@@ -490,8 +490,12 @@ struct task_group {
 	struct uclamp_se	uclamp[UCLAMP_CNT];
 	/* Latency-sensitive flag used for a task group */
 	unsigned int		latency_sensitive;
-#endif
+	unsigned int window_policy;
 
+	bool discount_wait_time;
+	bool top_task_filter;
+	bool ed_task_filter;
+#endif
 };
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
