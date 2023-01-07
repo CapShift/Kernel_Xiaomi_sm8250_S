@@ -594,4 +594,6 @@ static inline bool walt_fair_task(struct task_struct *p)
 
 extern void walt_lb_tick(struct rq *rq);
 extern void android_scheduler_tick(struct rq *rq);
+extern int __read_mostly num_sched_clusters;
+extern cpumask_t __read_mostly **cpu_array;
 #endif
