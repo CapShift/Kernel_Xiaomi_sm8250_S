@@ -11,7 +11,7 @@
 
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_UIFRIST_HEAVYLOAD)
 #include <trace/hooks/sched.h>
-static int sysctl_cpu_multi_thread = 0;
+static int sysctl_cpu_multi_thread = 1;
 static int ux_prefer_cpu[NR_CPUS] = { 0 };
 module_param_named(enable, sysctl_cpu_multi_thread, uint, 0644);
 #endif  /* IS_ENABLED(CONFIG_OPLUS_FEATURE_UIFRIST_HEAVYLOAD) */
