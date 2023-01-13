@@ -113,24 +113,32 @@ function check_stat_file() {
 	fi
 }
 
+function stat_print() {
+	cat /dev/null > ${STAT_FILE}    #clean all info
+	{								#Always Print them
+		echo "BUILD_COUNT=${BUILD}"
+		echo "IS_MULTI_BUILD=${MULTI_BUILD}"
+		echo "DEVICE=${DEVICE}"
+		echo "TARGET_OS=${OS}"
+		echo "$ZIPNAME" 
+
+		if [[ MULTI_BUILD -eq 1 ]]; then
+			echo "LIST_DIR=${device_list}"
+		fi
+	} >> "${STAT_FILE}" || export ZIPNAME
+
+	#Only when multi compile
+
+}
+
 function pre_compile() {
 	GET_BUILD_COUNT=$(awk -F "=" '/BUILD_COUNT/ {print $2}' "${STAT_FILE}")
 
-	if [[ -f ${STAT_FILE} ]]; then
-		BUILD=$GET_BUILD_COUNT
-
-		echo "BUILD_COUNT=${BUILD}" > ${STAT_FILE}
-		echo "IS_MULTI_BUILD=${MULTI_BUILD}" >> ${STAT_FILE}
-
-		if [[ MULTI_BUILD -eq 1 ]]; then
-			echo "LIST_DIR=${device_list}" >> ${STAT_FILE}
-		fi
-	fi
+	BUILD=$GET_BUILD_COUNT
 
 	echo "Current version is $GET_BUILD_COUNT"
 	ZIPNAME="Voyager-${DEVICE^^}-build${BUILD}-${OS}-${CSUM}-${DATE}.zip"
-	echo "$ZIPNAME" >> "${STAT_FILE}" || export ZIPNAME
-
+	stat_print
 }
 
 function post_compile() {
